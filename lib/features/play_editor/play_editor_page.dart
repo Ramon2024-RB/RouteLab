@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'formations/offense_formations.dart';
 import 'painters/football_field_painter.dart';
 
 class PlayEditor extends StatefulWidget {
@@ -9,6 +10,7 @@ class PlayEditor extends StatefulWidget {
     required this.initialPositions,
     required this.onPositionsChanged,
   });
+
   final String title;
   final List<Offset> initialPositions;
   final ValueChanged<List<Offset>> onPositionsChanged;
@@ -19,6 +21,9 @@ class PlayEditor extends StatefulWidget {
 
 class _PlayEditorState extends State<PlayEditor> {
   late final List<Offset> positions;
+  OffenseFormation formation = OffenseFormation.custom;
+  int? selected;
+  bool showDefense = true;
 
   @override
   void initState() {
@@ -26,10 +31,23 @@ class _PlayEditorState extends State<PlayEditor> {
     positions = List<Offset>.from(widget.initialPositions);
   }
 
-  void _savePositions() => widget.onPositionsChanged(positions);
+  void _savePositions() =>
+      widget.onPositionsChanged(List<Offset>.from(positions));
 
-  int? selected;
-  bool showDefense = true;
+  void _applyFormation(OffenseFormation next) {
+    if (next == OffenseFormation.custom) {
+      return;
+    }
+    final preset = offenseFormationPositions(next);
+    setState(() {
+      for (var i = 0; i < 11; i++) {
+        positions[i] = preset[i];
+      }
+      formation = next;
+      selected = null;
+    });
+    _savePositions();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +57,7 @@ class _PlayEditorState extends State<PlayEditor> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
               child: Row(
                 children: [
                   const Expanded(
@@ -54,22 +72,62 @@ class _PlayEditorState extends State<PlayEditor> {
                   const Text('Defense'),
                   Switch(
                     value: showDefense,
-                    onChanged: (v) => setState(() {
-                      showDefense = v;
+                    onChanged: (value) => setState(() {
+                      showDefense = value;
                       selected = null;
                     }),
                   ),
                 ],
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Spieler antippen und ziehen. Blau = Offense, Rot = Defense.',
-                style: TextStyle(color: Colors.white70),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  const Text(
+                    'Offense:',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<OffenseFormation>(
+                      key: ValueKey(formation),
+                      initialValue: formation,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                      items: OffenseFormation.values
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item,
+                              child: Text(item.label),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (next) {
+                        if (next != null && next != OffenseFormation.custom) {
+                          _applyFormation(next);
+                        }
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+              child: Text(
+                'Spieler antippen und ziehen. Blau = Offense, Rot = Defense. '
+                'Formationen ändern nur die Offense.',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            ),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -80,12 +138,15 @@ class _PlayEditorState extends State<PlayEditor> {
                       constraints.maxHeight,
                     );
                     return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
                       onPanStart: (details) =>
                           selectAt(details.localPosition, fieldSize),
                       onPanUpdate: (details) {
-                        if (selected == null) return;
-                        setState(
-                          () => positions[selected!] = Offset(
+                        if (selected == null) {
+                          return;
+                        }
+                        setState(() {
+                          positions[selected!] = Offset(
                             (details.localPosition.dx / fieldSize.width).clamp(
                               .03,
                               .97,
@@ -94,8 +155,11 @@ class _PlayEditorState extends State<PlayEditor> {
                               .03,
                               .97,
                             ),
-                          ),
-                        );
+                          );
+                          if (selected! < 11) {
+                            formation = OffenseFormation.custom;
+                          }
+                        });
                       },
                       onPanEnd: (_) => _savePositions(),
                       onPanCancel: _savePositions,
@@ -107,6 +171,7 @@ class _PlayEditorState extends State<PlayEditor> {
                           positions,
                           selected,
                           showDefense,
+                          offenseFormation: formation,
                         ),
                       ),
                     );
@@ -122,13 +187,13 @@ class _PlayEditorState extends State<PlayEditor> {
                     child: Text(
                       selected == null
                           ? 'Wähle einen Spieler aus.'
-                          : 'Ausgewählt: ${selected! < 11 ? 'Offense' : 'Defense'} #${selected! < 11 ? selected! + 1 : selected! - 10}',
+                          : selected! < 11
+                          ? 'Offense: ${offenseLabelAt(selected!, formation)}'
+                          : 'Defense: ${defenseLabels[selected! - 11]}',
                     ),
                   ),
                   OutlinedButton.icon(
-                    onPressed: () => setState(() {
-                      selected = null;
-                    }),
+                    onPressed: () => setState(() => selected = null),
                     icon: const Icon(Icons.check),
                     label: const Text('Fertig'),
                   ),
@@ -145,7 +210,9 @@ class _PlayEditorState extends State<PlayEditor> {
     int? closest;
     var minDistance = 28.0;
     for (var i = 0; i < positions.length; i++) {
-      if (!showDefense && i >= 11) continue;
+      if (!showDefense && i >= 11) {
+        continue;
+      }
       final p = Offset(
         positions[i].dx * size.width,
         positions[i].dy * size.height,

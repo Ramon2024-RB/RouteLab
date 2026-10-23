@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
 
+import '../formations/offense_formations.dart';
+
 class FootballFieldPainter extends CustomPainter {
-  FootballFieldPainter(this.positions, this.selected, this.showDefense);
+  FootballFieldPainter(
+    this.positions,
+    this.selected,
+    this.showDefense, {
+    required this.offenseFormation,
+  });
+
   final List<Offset> positions;
   final int? selected;
   final bool showDefense;
+  final OffenseFormation offenseFormation;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final field = Paint()..color = const Color(0xFF145034);
     canvas.drawRRect(
       RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(12)),
-      field,
+      Paint()..color = const Color(0xFF145034),
     );
     final line = Paint()
       ..color = Colors.white.withValues(alpha: .28)
@@ -27,13 +35,12 @@ class FootballFieldPainter extends CustomPainter {
         line,
       );
     }
-    final scrimmage = Paint()
-      ..color = const Color(0xFFFFD06A)
-      ..strokeWidth = 2;
     canvas.drawLine(
       Offset(0, size.height * .54),
       Offset(size.width, size.height * .54),
-      scrimmage,
+      Paint()
+        ..color = const Color(0xFFFFD06A)
+        ..strokeWidth = 2,
     );
     for (var i = 0; i < positions.length; i++) {
       if (i >= 11 && !showDefense) continue;
@@ -41,16 +48,23 @@ class FootballFieldPainter extends CustomPainter {
         positions[i].dx * size.width,
         positions[i].dy * size.height,
       );
-      final selectedPaint = Paint()..color = Colors.white;
-      final player = Paint()
-        ..color = i < 11 ? const Color(0xFF238EF5) : const Color(0xFFF15C5C);
-      if (selected == i) canvas.drawCircle(p, 16, selectedPaint);
-      canvas.drawCircle(p, 12, player);
+      if (selected == i) {
+        canvas.drawCircle(p, 19, Paint()..color = Colors.white);
+      }
+      canvas.drawCircle(
+        p,
+        16,
+        Paint()
+          ..color = i < 11 ? const Color(0xFF238EF5) : const Color(0xFFF15C5C),
+      );
+      final label = i < 11
+          ? offenseLabelAt(i, offenseFormation)
+          : defenseLabels[i - 11];
       final textPainter = TextPainter(
         text: TextSpan(
-          text: '${i < 11 ? i + 1 : i - 10}',
+          text: label,
           style: const TextStyle(
-            fontSize: 10,
+            fontSize: 9,
             color: Colors.white,
             fontWeight: FontWeight.bold,
           ),

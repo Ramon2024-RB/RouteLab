@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 class CreatePlayDialog extends StatefulWidget {
   const CreatePlayDialog({super.key});
 
@@ -30,19 +31,14 @@ class CreatePlayDialogState extends State<CreatePlayDialog> {
         textCapitalization: TextCapitalization.words,
         textInputAction: TextInputAction.done,
         onSubmitted: (_) => _submit(),
-        decoration: const InputDecoration(
-          hintText: 'z. B. Inside Zone Right',
-        ),
+        decoration: const InputDecoration(hintText: 'z. B. Inside Zone Right'),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Abbrechen'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Erstellen'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('Erstellen')),
       ],
     );
   }
