@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../formations/offense_formations.dart';
+import '../../../data/models/route_model.dart';
+import '../../../data/models/coverage_assignment.dart';
+import '../formations/defense_formations.dart';
 
 class FootballFieldPainter extends CustomPainter {
   FootballFieldPainter(
@@ -8,12 +11,28 @@ class FootballFieldPainter extends CustomPainter {
     this.selected,
     this.showDefense, {
     required this.offenseFormation,
+    required this.defenseFormation,
+    this.routes = const [],
+    this.coverages = const [],
+    this.showAllCoverage = true,
+    this.viewFilter = 'all',
+    this.focusSelected = false,
+    this.draftPoints = const [],
+    this.draftPlayer,
   });
 
   final List<Offset> positions;
+  final List<PlayerRoute> routes;
+  final List<CoverageAssignment> coverages;
+  final bool showAllCoverage;
+  final String viewFilter;
+  final bool focusSelected;
+  final List<Offset> draftPoints;
+  final int? draftPlayer;
   final int? selected;
   final bool showDefense;
   final OffenseFormation offenseFormation;
+  final DefenseFormation defenseFormation;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -42,6 +61,93 @@ class FootballFieldPainter extends CustomPainter {
         ..color = const Color(0xFFFFD06A)
         ..strokeWidth = 2,
     );
+    if (showDefense && viewFilter != 'offense' && viewFilter != 'blocking') {
+      for (final assignment in coverages) {
+        if (!showAllCoverage && assignment.defenderIndex != selected) continue;
+        if (focusSelected && selected != null && assignment.defenderIndex != selected &&
+            assignment.receiverIndex != selected) {
+          continue;
+        }
+        if (assignment.defenderIndex < 11 || assignment.defenderIndex >= positions.length) continue;
+        final defender = positions[assignment.defenderIndex];
+        final color = Colors.primaries[(assignment.defenderIndex - 11) % Colors.primaries.length];
+        if (assignment.kind == 'zone' && assignment.zone != null) {
+          final zone = assignment.zone!;
+          final rect = Rect.fromLTRB(zone.left * size.width, zone.top * size.height,
+            zone.right * size.width, zone.bottom * size.height);
+          canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)),
+            Paint()..color = color.withValues(alpha: .19));
+          canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)),
+            Paint()..color = color.withValues(alpha: .85)
+              ..style = PaintingStyle.stroke ..strokeWidth = 1.6);
+          final label = assignment.zoneName ?? 'Zone';
+          final paragraph = TextPainter(text: TextSpan(text: label,
+            style: const TextStyle(color: Colors.white, fontSize: 10,
+              fontWeight: FontWeight.w600, shadows: [Shadow(blurRadius: 3, color: Colors.black)])),
+            textDirection: TextDirection.ltr, maxLines: 2, ellipsis: '…')
+            ..layout(maxWidth: rect.width.clamp(20.0, size.width));
+          paragraph.paint(canvas, rect.topLeft + const Offset(5, 5));
+        } else if (assignment.kind == 'man' && assignment.receiverIndex != null &&
+            assignment.receiverIndex! >= 0 && assignment.receiverIndex! < 11) {
+          final receiver = positions[assignment.receiverIndex!];
+          final start = Offset(defender.dx * size.width, defender.dy * size.height);
+          final end = Offset(receiver.dx * size.width, receiver.dy * size.height);
+          final stroke = Paint()..color = const Color(0xFF80E5FF)
+            ..strokeWidth = 2 ..style = PaintingStyle.stroke;
+          final delta = end - start;
+          if (delta.distance > 0) {
+            final unit = delta / delta.distance;
+            for (var d = 0.0; d < delta.distance; d += 12) {
+              canvas.drawLine(start + unit * d,
+                start + unit * (d + 6).clamp(0.0, delta.distance), stroke);
+            }
+          }
+          canvas.drawCircle(end, 20, Paint()..color = const Color(0xFF80E5FF)
+            ..style = PaintingStyle.stroke ..strokeWidth = 2);
+        }
+      }
+    }
+    for (final route in routes) {
+      if (route.playerIndex < 0 || route.playerIndex >= positions.length) continue;
+      if (!showDefense && route.playerIndex >= 11) continue;
+      if (viewFilter == 'offense' && route.playerIndex >= 11) continue;
+      if (viewFilter == 'defense' && route.playerIndex < 11) continue;
+      if (viewFilter == 'blocking' &&
+          route.action != 'block' && route.action != 'protection') {
+        continue;
+      }
+      if (focusSelected && selected != null &&
+          route.playerIndex != selected && route.targetIndex != selected) {
+        continue;
+      }
+      final target = route.targetIndex;
+      if (target != null && target >= 0 && target < positions.length) {
+        if (!showDefense && target >= 11) continue;
+        final start = positions[route.playerIndex];
+        final end = positions[target];
+        final startPixel = Offset(start.dx * size.width, start.dy * size.height);
+        final endPixel = Offset(end.dx * size.width, end.dy * size.height);
+        if (route.action == 'block') {
+          _drawBlockAssignment(canvas, startPixel, endPixel);
+        } else if (route.action == 'handoff') {
+          _drawHandoff(canvas, startPixel, endPixel);
+        } else {
+          _drawBlockAssignment(canvas, startPixel, endPixel);
+        }
+      } else {
+        if (route.action == 'block' || route.action == 'protection') {
+          _drawBlockingTechnique(canvas, size, positions[route.playerIndex], route);
+        } else {
+          _drawRoute(canvas, size, positions[route.playerIndex], route.points,
+              _actionColor(route.action, route.playerIndex),
+              dashed: route.action == 'coverage' || route.action == 'movement');
+        }
+      }
+    }
+    if (draftPlayer != null && draftPoints.length > 1) {
+      _drawRoute(canvas, size, positions[draftPlayer!], draftPoints,
+          const Color(0xFFFFFF66));
+    }
     for (var i = 0; i < positions.length; i++) {
       if (i >= 11 && !showDefense) continue;
       final p = Offset(
@@ -59,7 +165,7 @@ class FootballFieldPainter extends CustomPainter {
       );
       final label = i < 11
           ? offenseLabelAt(i, offenseFormation)
-          : defenseLabels[i - 11];
+          : defenseLabelsFor(defenseFormation)[i - 11];
       final textPainter = TextPainter(
         text: TextSpan(
           text: label,
@@ -75,6 +181,127 @@ class FootballFieldPainter extends CustomPainter {
         canvas,
         p - Offset(textPainter.width / 2, textPainter.height / 2),
       );
+    }
+  }
+
+  // Classic playbook notation: a T-bar denotes a block, not a run arrow.
+  // Both endpoints stop outside the player circles, keeping labels legible.
+  void _drawBlockAssignment(Canvas canvas, Offset from, Offset to) {
+    final delta = to - from;
+    if (delta.distance < 38) return;
+    final unit = delta / delta.distance;
+    final side = Offset(-unit.dy, unit.dx);
+    final start = from + unit * 19;
+    final end = to - unit * 20;
+    final paint = Paint()
+      ..color = const Color(0xFFFFD166)
+      ..strokeWidth = 2.8
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(start, end, paint);
+    canvas.drawLine(end - side * 9, end + side * 9, paint);
+  }
+
+  void _drawHandoff(Canvas canvas, Offset from, Offset to) {
+    final delta = to - from;
+    if (delta.distance < 38) return;
+    final unit = delta / delta.distance;
+    final start = from + unit * 18;
+    final end = to - unit * 18;
+    final paint = Paint()
+      ..color = const Color(0xFFF2F5F0)
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+    final length = (end - start).distance;
+    for (var d = 0.0; d < length; d += 11) {
+      canvas.drawLine(start + unit * d,
+          start + unit * (d + 6).clamp(0.0, length), paint);
+    }
+    final mid = (start + end) / 2;
+    canvas.drawOval(Rect.fromCenter(center: mid, width: 12, height: 7),
+        Paint()..color = const Color(0xFFC98745));
+  }
+
+  void _drawBlockingTechnique(Canvas canvas, Size size, Offset origin,
+      PlayerRoute route) {
+    if (route.points.length < 2) return;
+    Offset pixel(Offset p) => Offset((origin.dx + p.dx) * size.width,
+        (origin.dy + p.dy) * size.height);
+    final name = route.name.toLowerCase();
+    // Pulling and block-release actions represent actual movement;
+    // unlike a stationary block they keep their full drawn path.
+    if (name.contains('pull') || name.contains('release') ||
+        name.contains('lead')) {
+      _drawRoute(canvas, size, origin, route.points,
+          const Color(0xFFFFD166));
+      return;
+    }
+    final start = pixel(route.points.first);
+    final destination = pixel(route.points.last);
+    final delta = destination - start;
+    if (delta.distance < 1) return;
+    final unit = delta / delta.distance;
+    final side = Offset(-unit.dy, unit.dx);
+    // Compact notation: short block stroke with a perpendicular T-cap.
+    final base = start + unit * 17;
+    final end = start + unit * delta.distance.clamp(29.0, 46.0);
+    final paint = Paint()
+      ..color = const Color(0xFFFFD166)
+      ..strokeWidth = 2.8
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(base, end, paint);
+    canvas.drawLine(end - side * 9, end + side * 9, paint);
+  }
+
+  Color _actionColor(String action, int index) => switch (action) {
+    'block' || 'protection' => const Color(0xFFFFD166),
+    'run' || 'movement' => const Color(0xFF57D7FF),
+    'handoff' || 'pass' || 'pitch' => const Color(0xFFFFFFFF),
+    'blitz' => const Color(0xFFFF6565),
+    'coverage' || 'defense' => const Color(0xFFFFB35C),
+    _ => index < 11 ? const Color(0xFF39F47B) : const Color(0xFFFFB35C),
+  };
+
+  void _drawRoute(Canvas canvas, Size size, Offset origin,
+      List<Offset> points, Color color, {bool dashed = false}) {
+    if (points.length < 2) return;
+    final path = Path();
+    Offset pixel(Offset p) => Offset((origin.dx + p.dx) * size.width,
+        (origin.dy + p.dy) * size.height);
+    path.moveTo(pixel(points.first).dx, pixel(points.first).dy);
+    for (final point in points.skip(1)) {
+      final next = pixel(point);
+      path.lineTo(next.dx, next.dy);
+    }
+    final stroke = Paint()
+      ..color = color
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    if (dashed) {
+      for (final metric in path.computeMetrics()) {
+        for (var distance = 0.0; distance < metric.length; distance += 13) {
+          canvas.drawPath(metric.extractPath(distance,
+              (distance + 7).clamp(0.0, metric.length)), stroke);
+        }
+      }
+    } else {
+      canvas.drawPath(path, stroke);
+    }
+    final end = pixel(points.last);
+    final before = pixel(points[points.length - 2]);
+    final direction = end - before;
+    if (direction.distance > 1) {
+      final u = direction / direction.distance;
+      final wing = Offset(-u.dy, u.dx);
+      final arrow = Path()
+        ..moveTo(end.dx, end.dy)
+        ..lineTo((end - u * 11 + wing * 5).dx, (end - u * 11 + wing * 5).dy)
+        ..moveTo(end.dx, end.dy)
+        ..lineTo((end - u * 11 - wing * 5).dx, (end - u * 11 - wing * 5).dy);
+      canvas.drawPath(arrow, Paint()
+        ..color = color ..strokeWidth = 3 ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round);
     }
   }
 

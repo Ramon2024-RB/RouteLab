@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../data/models/play_model.dart';
+import '../../data/models/coverage_assignment.dart';
+import '../../data/models/route_model.dart';
 import '../../data/repositories/play_repository.dart';
 import '../play_editor/play_editor_page.dart';
 import '../playbooks/widgets/create_play_dialog.dart';
@@ -60,6 +62,16 @@ class _RouteLabHomeState extends State<RouteLabHome> {
         builder: (_) => PlayEditor(
           title: play.name,
           initialPositions: play.positions,
+          initialRoutes: play.routes,
+          initialCoverages: play.coverages,
+          onCoveragesChanged: (List<CoverageAssignment> updated) {
+            play.coverages = List<CoverageAssignment>.of(updated);
+            _savePlays();
+          },
+          onRoutesChanged: (updated) {
+            play.routes = List<PlayerRoute>.from(updated);
+            _savePlays();
+          },
           onPositionsChanged: (updated) {
             play.positions = List<Offset>.from(updated);
             _savePlays();
