@@ -16,7 +16,7 @@ class RouteLabHome extends StatefulWidget {
 }
 
 class _RouteLabHomeState extends State<RouteLabHome> {
-  int tab = 0;
+  PlayCategory? category;
   final plays = <SavedPlay>[];
   final storage = PlayStorage();
   bool loading = true;
@@ -81,7 +81,14 @@ class _RouteLabHomeState extends State<RouteLabHome> {
     );
   }
 
+  Future<void> movePlay(SavedPlay play, PlayCategory target) async {
+    setState(() => play.category = target);
+    await _savePlays();
+  }
+
   Future<void> createPlay() async {
+    final currentCategory = category;
+    if (currentCategory == null) return;
     final name = await showDialog<String>(
       context: context,
       builder: (_) => const CreatePlayDialog(),
@@ -90,6 +97,7 @@ class _RouteLabHomeState extends State<RouteLabHome> {
     final play = SavedPlay(
       id: const Uuid().v4(),
       name: name,
+      category: currentCategory,
       positions: defaultPlayerPositions(),
     );
     setState(() => plays.add(play));
@@ -129,187 +137,117 @@ class _RouteLabHomeState extends State<RouteLabHome> {
   @override
   Widget build(BuildContext context) {
     const green = Color(0xFF39F47B);
+    final current = category;
+    final visible = current == null ? <SavedPlay>[] :
+        plays.where((p) => p.category == current).toList();
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(9),
-              child: Image.asset(
-                'assets/images/routelab_logo.png',
-                width: 38,
-                height: 38,
-                fit: BoxFit.cover,
-              ),
-            ),
-            const SizedBox(width: 11),
-            const Text(
-              'RouteLab',
-              style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5),
-            ),
-          ],
+        leading: current == null ? null : IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => setState(() => category = null),
         ),
-        actions: [
-          IconButton(
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Einstellungen folgen in einer späteren Version.',
-                ),
-              ),
-            ),
-            icon: const Icon(Icons.settings_outlined),
-          ),
-        ],
+        title: Text(current == null ? 'RouteLab' : '${current.label} Playbook',
+          style: const TextStyle(fontWeight: FontWeight.bold)),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: tab == 0
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 14),
-                    const Text(
-                      'Design. Animate. Execute.',
-                      style: TextStyle(color: green, fontSize: 15),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Deine Plays.\nDein Gameplan.',
-                      style: TextStyle(
-                        fontSize: 33,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 26),
-                    Card(
-                      color: const Color(0xFF153024),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.route, color: green, size: 35),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'Erstelle deinen nächsten Spielzug',
-                              style: TextStyle(
-                                fontSize: 19,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Positioniere Spieler auf dem Feld und plane ihre Bewegungen.',
-                            ),
-                            const SizedBox(height: 18),
-                            FilledButton.icon(
-                              onPressed: createPlay,
-                              icon: const Icon(Icons.add),
-                              label: const Text('Neues Play'),
-                            ),
+        child: current == null
+          ? ListView(padding: const EdgeInsets.all(20), children: [
+              const SizedBox(height: 18),
+              const Text('DESIGN. STUDY. EXECUTE.',
+                  style: TextStyle(color: green, letterSpacing: 1.5)),
+              const SizedBox(height: 12),
+              const Text('Dein Gameplan.\nDeine Playbooks.',
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 24),
+              for (final item in PlayCategory.values) ...[
+                Card(color: const Color(0xFF153024), clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => setState(() => category = item),
+                    child: Padding(padding: const EdgeInsets.all(20), child: Row(children: [
+                      Icon(_icon(item), color: green, size: 32),
+                      const SizedBox(width: 18),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(item.label, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 6),
+                          Text(_description(item), style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                          const SizedBox(height: 9),
+                          Text('${plays.where((p) => p.category == item).length} Plays',
+                            style: const TextStyle(color: green)),
+                        ])),
+                      const Icon(Icons.chevron_right),
+                    ])),
+                  )),
+                const SizedBox(height: 12),
+              ],
+              if (loading) const Center(child: CircularProgressIndicator()),
+              const SizedBox(height: 12),
+              const Text('Bisherige Plays werden zunächst unter Offense angezeigt und können verschoben werden.',
+                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+            ])
+          : Column(children: [
+              Padding(padding: const EdgeInsets.all(20), child: Row(children: [
+                Icon(_icon(current), color: green),
+                const SizedBox(width: 12),
+                Expanded(child: Text(_description(current),
+                  style: const TextStyle(color: Colors.white70))),
+              ])),
+              Expanded(child: loading
+                ? const Center(child: CircularProgressIndicator())
+                : visible.isEmpty
+                  ? const Center(child: Text('Noch keine Plays in diesem Playbook.'))
+                  : ListView.builder(
+                    itemCount: visible.length,
+                    itemBuilder: (context, index) {
+                      final play = visible[index];
+                      return Card(child: ListTile(
+                        leading: Icon(_icon(current), color: green),
+                        title: Text(play.name),
+                        onTap: () => openPlay(play),
+                        trailing: PopupMenuButton<String>(
+                          tooltip: 'Play verwalten',
+                          onSelected: (value) {
+                            if (value == 'delete') {
+                              final actualIndex = plays.indexWhere((p) => p.id == play.id);
+                              deletePlay(actualIndex);
+                            } else {
+                              movePlay(play, PlayCategory.values.firstWhere((v) => v.name == value));
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            for (final target in PlayCategory.values)
+                              if (target != current)
+                                PopupMenuItem(value: target.name,
+                                  child: Text('Zu ${target.label} verschieben')),
+                            const PopupMenuDivider(),
+                            const PopupMenuItem(value: 'delete', child: Text('Löschen')),
                           ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 25),
-                    Text(
-                      'Meine Plays (${plays.length})',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: loading
-                          ? const Center(child: CircularProgressIndicator())
-                          : plays.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Noch keine Plays erstellt.',
-                                style: TextStyle(color: Colors.white60),
-                              ),
-                            )
-                          : ListView.builder(
-                              itemCount: plays.length,
-                              itemBuilder: (context, i) => Card(
-                                child: ListTile(
-                                  leading: const Icon(
-                                    Icons.sports_football,
-                                    color: green,
-                                  ),
-                                  title: Text(plays[i].name),
-                                  trailing: IconButton(
-                                    tooltip: 'Spielzug löschen',
-                                    icon: const Icon(Icons.delete_outline),
-                                    onPressed: () => deletePlay(i),
-                                  ),
-                                  onTap: () => openPlay(plays[i]),
-                                ),
-                              ),
-                            ),
-                    ),
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Playbooks',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Deine Spielzüge werden auf diesem Gerät gespeichert.',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                    const SizedBox(height: 18),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: loading ? 0 : plays.length,
-                        itemBuilder: (context, i) => ListTile(
-                          title: Text(plays[i].name),
-                          leading: const Icon(Icons.route, color: green),
-                          trailing: IconButton(
-                            tooltip: 'Spielzug löschen',
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: () => deletePlay(i),
-                          ),
-                          onTap: () => openPlay(plays[i]),
-                        ),
-                      ),
-                    ),
-                    FilledButton.icon(
-                      onPressed: createPlay,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Neues Play'),
-                    ),
-                  ],
+                      ));
+                    },
+                  )),
+              Padding(padding: const EdgeInsets.all(20), child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: createPlay,
+                  icon: const Icon(Icons.add),
+                  label: Text('Neues ${current.label} Play'),
                 ),
-        ),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: tab,
-        onDestinationSelected: (value) => setState(() => tab = value),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Start',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.menu_book_outlined),
-            selectedIcon: Icon(Icons.menu_book),
-            label: 'Playbooks',
-          ),
-        ],
+              )),
+            ]),
       ),
     );
   }
+
+  IconData _icon(PlayCategory value) => switch (value) {
+    PlayCategory.offense => Icons.trending_up,
+    PlayCategory.defense => Icons.shield_outlined,
+    PlayCategory.specialTeams => Icons.sports_football,
+  };
+
+  String _description(PlayCategory value) => switch (value) {
+    PlayCategory.offense => 'Runs · Passes · Blocking · Motion',
+    PlayCategory.defense => 'Fronts · Coverage · Blitz',
+    PlayCategory.specialTeams => 'Kickoff · Punt · Return · Field Goal',
+  };
 }

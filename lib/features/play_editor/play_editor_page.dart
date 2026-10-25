@@ -282,12 +282,40 @@ class _PlayEditorState extends State<PlayEditor> {
         return coverageZonePresets.where((z) => z.name.contains('Half')).toList();
       case 'Deep Quarter':
         return coverageZonePresets.where((z) => z.name.contains('Quarter')).toList();
-      case 'Underneath':
-        return coverageZonePresets.where((z) =>
-          !z.name.contains('Deep')).toList();
+      case 'Flat':
+        return coverageZonePresets.where((z) => z.name == 'Left Flat' || z.name == 'Right Flat').toList();
+      case 'Curl/Flat':
+        return coverageZonePresets.where((z) => z.name.contains('Curl/Flat')).toList();
+      case 'Hook/Curl':
+        return coverageZonePresets.where((z) => z.name.contains('Hook/Curl')).toList();
+      case 'Middle':
+        return coverageZonePresets.where((z) => z.name == 'Middle Hook' || z.name == 'Middle Hole').toList();
       default:
         return coverageZonePresets.where((z) => z.name.contains('Third')).toList();
     }
+  }
+
+  String _shortZoneName(String name) {
+    const labels = <String, String>{
+      'Deep Left Third': 'L 1/3',
+      'Deep Middle Third': 'M 1/3',
+      'Deep Right Third': 'R 1/3',
+      'Deep Left Half': 'L 1/2',
+      'Deep Right Half': 'R 1/2',
+      'Deep Left Quarter': 'L 1/4',
+      'Deep Left-Middle Quarter': 'LM 1/4',
+      'Deep Right-Middle Quarter': 'RM 1/4',
+      'Deep Right Quarter': 'R 1/4',
+      'Left Flat': 'Flat L',
+      'Right Flat': 'Flat R',
+      'Left Curl/Flat': 'C/F L',
+      'Right Curl/Flat': 'C/F R',
+      'Left Hook/Curl': 'H/C L',
+      'Right Hook/Curl': 'H/C R',
+      'Middle Hook': 'Mid Hook',
+      'Middle Hole': 'Mid Hole',
+    };
+    return labels[name] ?? name;
   }
 
   void _assignCoverageZone(CoverageZonePreset preset) {
@@ -330,7 +358,7 @@ class _PlayEditorState extends State<PlayEditor> {
               onTap: () => _assignCoverageZone(preset),
               child: Center(child: Padding(
                 padding: const EdgeInsets.all(3),
-                child: Text(preset.name.replaceAll('Deep ', ''),
+                child: Text(_shortZoneName(preset.name),
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -354,7 +382,7 @@ class _PlayEditorState extends State<PlayEditor> {
               const SizedBox(height: 6),
               SingleChildScrollView(scrollDirection: Axis.horizontal,
                 child: Row(children: [
-                  for (final group in const ['Deep Third', 'Deep Half', 'Deep Quarter', 'Underneath'])
+                  for (final group in const ['Deep Third', 'Deep Half', 'Deep Quarter', 'Flat', 'Curl/Flat', 'Hook/Curl', 'Middle'])
                     Padding(padding: const EdgeInsets.only(right: 5),
                       child: ChoiceChip(
                         label: Text(group, style: const TextStyle(fontSize: 10)),
@@ -644,7 +672,7 @@ class _PlayEditorState extends State<PlayEditor> {
           offenseFormation: formation,
           defenseFormation: defenseFormation,
           routes: routes,
-          coverages: coverages,
+          coverages: zoneSelectionPlayer == null ? coverages : const <CoverageAssignment>[],
           showAllCoverage: showAllCoverage,
           viewFilter: viewFilter,
           focusSelected: focusSelected,
@@ -746,6 +774,11 @@ class _PlayEditorState extends State<PlayEditor> {
             PopupMenuItem(value: 'defense', child: Text('Defense')),
             PopupMenuItem(value: 'blocking', child: Text('Blocking')),
           ],
+        ),
+        IconButton(
+          tooltip: 'Coverage-Aufgaben aller Spieler',
+          onPressed: _showCoverageOverview,
+          icon: const Icon(Icons.assignment_outlined),
         ),
         IconButton(
           tooltip: showAllCoverage ? 'Nur ausgewählte Coverage anzeigen' : 'Alle Coverage-Aufgaben anzeigen',
@@ -910,6 +943,105 @@ class _PlayEditorState extends State<PlayEditor> {
     );
   }
 
+  void _showCoverageOverview() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final assignments = List<CoverageAssignment>.from(coverages)
+          ..sort((a, b) => a.defenderIndex.compareTo(b.defenderIndex));
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Coverage-Übersicht',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Text('${assignments.length} zugewiesene Coverage-Aufgaben',
+                    style: const TextStyle(color: Colors.white70)),
+                const SizedBox(height: 12),
+                if (assignments.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Text('Noch keine Coverage zugewiesen.'),
+                  ),
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: assignments.length,
+                    itemBuilder: (context, index) {
+                      final assignment = assignments[index];
+                      final defender = assignment.defenderIndex;
+                      if (defender < 11 || defender >= positions.length) {
+                        return const SizedBox.shrink();
+                      }
+                      final defenderName =
+                          defenseLabelsFor(defenseFormation)[defender - 11];
+                      final isMan = assignment.kind == 'man';
+                      final receiver = assignment.receiverIndex;
+                      final targetName = isMan && receiver != null &&
+                              receiver >= 0 && receiver < 11
+                          ? offenseLabelAt(receiver, formation)
+                          : 'nicht zugewiesen';
+                      final description = isMan
+                          ? 'Man Coverage → $targetName'
+                          : 'Zone Coverage → ${assignment.zoneName ?? 'Zone'}';
+                      final color = Colors.primaries[(defender - 11) % Colors.primaries.length];
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          backgroundColor: color,
+                          child: Text(defenderName,
+                              style: const TextStyle(color: Colors.white,
+                                  fontSize: 10, fontWeight: FontWeight.bold)),
+                        ),
+                        title: Text(defenderName,
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text(description),
+                        trailing: const Icon(Icons.center_focus_strong),
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          setState(() {
+                            selected = defender;
+                            showDefense = true;
+                            showAllCoverage = false;
+                            viewFilter = 'all';
+                            focusSelected = false;
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      setState(() {
+                        showDefense = true;
+                        showAllCoverage = true;
+                        focusSelected = false;
+                        viewFilter = 'all';
+                      });
+                    },
+                    icon: const Icon(Icons.layers_outlined),
+                    label: const Text('Alle Coverage-Aufgaben anzeigen'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
@@ -920,6 +1052,11 @@ class _PlayEditorState extends State<PlayEditor> {
           Text('${formation.label} · ${defenseFormation.label}', style: const TextStyle(fontSize: 11, color: Colors.white54)),
         ]),
         actions: [
+          IconButton(
+            tooltip: 'Coverage-Übersicht',
+            icon: const Icon(Icons.assignment_outlined),
+            onPressed: _showCoverageOverview,
+          ),
           IconButton(tooltip: 'Formation', icon: const Icon(Icons.grid_view_rounded), onPressed: _openFormations),
           IconButton(tooltip: 'Defense anzeigen', icon: Icon(showDefense ? Icons.visibility_outlined : Icons.visibility_off_outlined),
             onPressed: () => setState(() { showDefense = !showDefense; selected = null; })),

@@ -2,18 +2,30 @@ import 'package:flutter/material.dart';
 import 'route_model.dart';
 import 'coverage_assignment.dart';
 
+enum PlayCategory { offense, defense, specialTeams }
+
+extension PlayCategoryLabel on PlayCategory {
+  String get label => switch (this) {
+    PlayCategory.offense => 'Offense',
+    PlayCategory.defense => 'Defense',
+    PlayCategory.specialTeams => 'Special Teams',
+  };
+}
+
 class SavedPlay {
-  SavedPlay({required this.id, required this.name, required this.positions, List<PlayerRoute>? routes, List<CoverageAssignment>? coverages})
+  SavedPlay({required this.id, required this.name, required this.positions, List<PlayerRoute>? routes, List<CoverageAssignment>? coverages, this.category = PlayCategory.offense})
       : routes = routes ?? [], coverages = coverages ?? [];
 
   final String id;
   final String name;
+  PlayCategory category;
   List<Offset> positions;
   List<PlayerRoute> routes;
   List<CoverageAssignment> coverages;
 
   Map<String, dynamic> toJson() => {
     'id': id,
+    'category': category.name,
     'name': name,
     'positions': positions.map((p) => {'x': p.dx, 'y': p.dy}).toList(),
     'routes': routes.map((r) => r.toJson()).toList(),
@@ -33,6 +45,7 @@ class SavedPlay {
         : <Offset>[];
     return SavedPlay(
       id: json['id'] as String,
+      category: PlayCategory.values.firstWhere((v) => v.name == json['category'], orElse: () => PlayCategory.offense),
       name: json['name'] as String,
       positions: parsed.length == 22 ? parsed : defaultPlayerPositions(),
       coverages: ((json['coverages'] as List?) ?? [])

@@ -80,7 +80,16 @@ class FootballFieldPainter extends CustomPainter {
           canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)),
             Paint()..color = color.withValues(alpha: .85)
               ..style = PaintingStyle.stroke ..strokeWidth = 1.6);
-          final label = assignment.zoneName ?? 'Zone';
+          final positionName = defenseLabelsFor(defenseFormation)[assignment.defenderIndex - 11];
+          final shortZone = (assignment.zoneName ?? 'Zone')
+              .replaceAll('Deep ', '')
+              .replaceAll('Left ', 'L ')
+              .replaceAll('Right ', 'R ')
+              .replaceAll('Middle ', 'M ')
+              .replaceAll('Third', '1/3')
+              .replaceAll('Half', '1/2')
+              .replaceAll('Quarter', '1/4');
+          final label = '$positionName · $shortZone';
           final paragraph = TextPainter(text: TextSpan(text: label,
             style: const TextStyle(color: Colors.white, fontSize: 10,
               fontWeight: FontWeight.w600, shadows: [Shadow(blurRadius: 3, color: Colors.black)])),
