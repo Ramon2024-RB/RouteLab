@@ -61,6 +61,7 @@ class _RouteLabHomeState extends State<RouteLabHome> {
       MaterialPageRoute<void>(
         builder: (_) => PlayEditor(
           title: play.name,
+          category: play.category,
           initialPositions: play.positions,
           initialRoutes: play.routes,
           initialCoverages: play.coverages,

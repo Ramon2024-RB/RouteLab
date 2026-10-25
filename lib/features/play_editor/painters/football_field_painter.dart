@@ -15,6 +15,7 @@ class FootballFieldPainter extends CustomPainter {
     this.routes = const [],
     this.coverages = const [],
     this.showAllCoverage = true,
+    this.showOffense = true,
     this.viewFilter = 'all',
     this.focusSelected = false,
     this.draftPoints = const [],
@@ -25,6 +26,7 @@ class FootballFieldPainter extends CustomPainter {
   final List<PlayerRoute> routes;
   final List<CoverageAssignment> coverages;
   final bool showAllCoverage;
+  final bool showOffense;
   final String viewFilter;
   final bool focusSelected;
   final List<Offset> draftPoints;
@@ -119,6 +121,7 @@ class FootballFieldPainter extends CustomPainter {
     for (final route in routes) {
       if (route.playerIndex < 0 || route.playerIndex >= positions.length) continue;
       if (!showDefense && route.playerIndex >= 11) continue;
+      if (!showOffense && route.playerIndex < 11) continue;
       if (viewFilter == 'offense' && route.playerIndex >= 11) continue;
       if (viewFilter == 'defense' && route.playerIndex < 11) continue;
       if (viewFilter == 'blocking' &&
@@ -132,6 +135,7 @@ class FootballFieldPainter extends CustomPainter {
       final target = route.targetIndex;
       if (target != null && target >= 0 && target < positions.length) {
         if (!showDefense && target >= 11) continue;
+        if (!showOffense && target < 11) continue;
         final start = positions[route.playerIndex];
         final end = positions[target];
         final startPixel = Offset(start.dx * size.width, start.dy * size.height);
@@ -159,6 +163,7 @@ class FootballFieldPainter extends CustomPainter {
     }
     for (var i = 0; i < positions.length; i++) {
       if (i >= 11 && !showDefense) continue;
+      if (i < 11 && !showOffense) continue;
       final p = Offset(
         positions[i].dx * size.width,
         positions[i].dy * size.height,

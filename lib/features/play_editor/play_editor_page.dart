@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../data/models/play_model.dart';
 import '../../data/models/route_model.dart';
 import '../../data/models/coverage_assignment.dart';
 import '../../data/repositories/route_repository.dart';
@@ -12,6 +13,7 @@ class PlayEditor extends StatefulWidget {
   const PlayEditor({
     super.key,
     required this.title,
+    required this.category,
     required this.initialPositions,
     required this.onPositionsChanged,
     required this.initialRoutes,
@@ -25,6 +27,7 @@ class PlayEditor extends StatefulWidget {
   final List<CoverageAssignment> initialCoverages;
   final void Function(List<CoverageAssignment> updated) onCoveragesChanged;
   final String title;
+  final PlayCategory category;
   final List<Offset> initialPositions;
   final ValueChanged<List<Offset>> onPositionsChanged;
 
@@ -37,7 +40,12 @@ class _PlayEditorState extends State<PlayEditor> {
   OffenseFormation formation = OffenseFormation.custom;
   DefenseFormation defenseFormation = DefenseFormation.custom;
   int? selected;
-  bool showDefense = true;
+  bool showDefense = false;
+  bool get _isOffense => widget.category == PlayCategory.offense;
+  bool get _isDefense => widget.category == PlayCategory.defense;
+  bool get _isSpecial => widget.category == PlayCategory.specialTeams;
+  bool _canSelect(int index) => showDefense || (_isDefense ? index >= 11 : index < 11);
+
   bool routeMode = false;
   bool freehand = true;
   bool formationsExpanded = false;
@@ -59,6 +67,8 @@ class _PlayEditorState extends State<PlayEditor> {
   void initState() {
     super.initState();
     positions = List<Offset>.from(widget.initialPositions);
+    viewFilter = _isDefense ? 'defense' : _isOffense ? 'offense' : 'all';
+    drawingAction = _isDefense ? 'blitz' : 'route';
     routes = List<PlayerRoute>.from(widget.initialRoutes);
     coverages = List<CoverageAssignment>.from(widget.initialCoverages);
     _loadTemplates();
@@ -475,7 +485,7 @@ class _PlayEditorState extends State<PlayEditor> {
     int? closest;
     var distanceLimit = 28.0;
     for (var i = 0; i < positions.length; i++) {
-      if (!showDefense && i >= 11) continue;
+      if (!_canSelect(i)) continue;
       final pixel = Offset(positions[i].dx * size.width, positions[i].dy * size.height);
       final distance = (pixel - point).distance;
       if (distance < distanceLimit) {
@@ -668,13 +678,14 @@ class _PlayEditorState extends State<PlayEditor> {
       child: CustomPaint(
         size: Size.infinite,
         painter: FootballFieldPainter(
-          positions, selected, showDefense,
+          positions, selected, showDefense || _isDefense,
+          showOffense: showDefense || !_isDefense,
           offenseFormation: formation,
           defenseFormation: defenseFormation,
           routes: routes,
-          coverages: zoneSelectionPlayer == null ? coverages : const <CoverageAssignment>[],
+          coverages: zoneSelectionPlayer == null && (_isDefense || showDefense) ? coverages : const <CoverageAssignment>[],
           showAllCoverage: showAllCoverage,
-          viewFilter: viewFilter,
+          viewFilter: showDefense ? 'all' : viewFilter,
           focusSelected: focusSelected,
           draftPoints: draft,
           draftPlayer: selected,
@@ -707,14 +718,14 @@ class _PlayEditorState extends State<PlayEditor> {
   }
 
   Widget _formationsPanel() => Column(children: [
-    DropdownButtonFormField<OffenseFormation>(
+    if (!_isDefense) DropdownButtonFormField<OffenseFormation>(
       key: ValueKey('offense_$formation'), initialValue: formation,
       decoration: const InputDecoration(labelText: 'Offense', border: OutlineInputBorder(), isDense: true),
       items: OffenseFormation.values.map((v) => DropdownMenuItem(value: v, child: Text(v.label))).toList(),
       onChanged: (v) { if (v != null) { _applyFormation(v); } },
     ),
-    const SizedBox(height: 10),
-    DropdownButtonFormField<DefenseFormation>(
+    if (!_isDefense && !_isSpecial) const SizedBox(height: 10),
+    if (_isDefense || showDefense) DropdownButtonFormField<DefenseFormation>(
       key: ValueKey('defense_$defenseFormation'), initialValue: defenseFormation,
       decoration: const InputDecoration(labelText: 'Defense', border: OutlineInputBorder(), isDense: true),
       items: DefenseFormation.values.map((v) => DropdownMenuItem(value: v, child: Text(v.label))).toList(),
@@ -764,7 +775,7 @@ class _PlayEditorState extends State<PlayEditor> {
           Text(selected == null ? 'Spieler antippen' : '$count Routen · ${coverages.where((c) => c.defenderIndex == selected).length} Coverage',
             style: const TextStyle(fontSize: 11, color: Colors.white54)),
         ])),
-        PopupMenuButton<String>(
+        if (showDefense) PopupMenuButton<String>(
           tooltip: 'Ansicht filtern',
           icon: const Icon(Icons.filter_alt_outlined),
           onSelected: (v) => setState(() => viewFilter = v),
@@ -775,12 +786,12 @@ class _PlayEditorState extends State<PlayEditor> {
             PopupMenuItem(value: 'blocking', child: Text('Blocking')),
           ],
         ),
-        IconButton(
+        if (_isDefense) IconButton(
           tooltip: 'Coverage-Aufgaben aller Spieler',
           onPressed: _showCoverageOverview,
           icon: const Icon(Icons.assignment_outlined),
         ),
-        IconButton(
+        if (_isDefense) IconButton(
           tooltip: showAllCoverage ? 'Nur ausgewählte Coverage anzeigen' : 'Alle Coverage-Aufgaben anzeigen',
           onPressed: () => setState(() => showAllCoverage = !showAllCoverage),
           icon: Icon(showAllCoverage ? Icons.layers : Icons.layers_clear),
@@ -826,7 +837,7 @@ class _PlayEditorState extends State<PlayEditor> {
           IconButton(tooltip: 'Auswahl aufheben', onPressed: selected == null ? null : () => setState(() => selected = null), icon: const Icon(Icons.close, size: 19)),
         ]),
         const SizedBox(height: 10),
-        Row(children: [
+        if (showDefense) Row(children: [
           Expanded(child: DropdownButtonFormField<String>(
             key: ValueKey('view_$viewFilter'),
             initialValue: viewFilter,
@@ -871,14 +882,14 @@ class _PlayEditorState extends State<PlayEditor> {
           const SizedBox(width: 7),
           Expanded(child: _toolButton(Icons.menu_book_outlined, 'Bibliothek', _showRouteLibrary)),
         ]),
-        if (selected != null && selected! >= 11) ...[
+        if (_isDefense && selected != null && selected! >= 11) ...[
           const SizedBox(height: 8),
           OutlinedButton.icon(onPressed: _showPlayerActions,
             icon: const Icon(Icons.shield_outlined), label: const Text('Coverage zuweisen / bearbeiten')),
           SwitchListTile.adaptive(title: const Text('Alle Coverage-Aufgaben anzeigen'),
             value: showAllCoverage, onChanged: (v) => setState(() => showAllCoverage = v)),
         ],
-        if (selected != null && selected! < 11) ...[
+        if (!_isDefense && selected != null && selected! < 11) ...[
           const SizedBox(height: 8),
           Row(children: [
             Expanded(child: OutlinedButton.icon(
@@ -910,15 +921,15 @@ class _PlayEditorState extends State<PlayEditor> {
           DropdownButtonFormField<String>(
             key: ValueKey('action_$drawingAction'), initialValue: drawingAction, isDense: true,
             decoration: const InputDecoration(labelText: 'Zeichenwerkzeug', isDense: true, border: OutlineInputBorder()),
-            items: const [
-              DropdownMenuItem(value: 'route', child: Text('Passroute')),
-              DropdownMenuItem(value: 'run', child: Text('Laufweg')),
-              DropdownMenuItem(value: 'movement', child: Text('QB-Bewegung')),
-              DropdownMenuItem(value: 'block', child: Text('Run Block / Pull')),
-              DropdownMenuItem(value: 'protection', child: Text('Pass Protection')),
-              DropdownMenuItem(value: 'blitz', child: Text('Blitz')),
-              DropdownMenuItem(value: 'coverage', child: Text('Coverage')),
-              DropdownMenuItem(value: 'defense', child: Text('Run Fit / Defense')),
+            items: [
+              if (!_isDefense) const DropdownMenuItem(value: 'route', child: Text('Passroute')),
+              if (!_isDefense) const DropdownMenuItem(value: 'run', child: Text('Laufweg')),
+              if (!_isDefense) const DropdownMenuItem(value: 'movement', child: Text('QB-Bewegung')),
+              if (!_isDefense) const DropdownMenuItem(value: 'block', child: Text('Run Block / Pull')),
+              if (!_isDefense) const DropdownMenuItem(value: 'protection', child: Text('Pass Protection')),
+              if (_isDefense) const DropdownMenuItem(value: 'blitz', child: Text('Blitz')),
+              if (_isDefense) const DropdownMenuItem(value: 'coverage', child: Text('Coverage')),
+              if (_isDefense) const DropdownMenuItem(value: 'defense', child: Text('Run Fit / Defense')),
             ],
             onChanged: (v) { if (v != null) { setState(() => drawingAction = v); } },
           ),
@@ -1049,17 +1060,17 @@ class _PlayEditorState extends State<PlayEditor> {
       appBar: AppBar(
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(widget.title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-          Text('${formation.label} · ${defenseFormation.label}', style: const TextStyle(fontSize: 11, color: Colors.white54)),
+          Text(_isDefense ? defenseFormation.label : _isSpecial ? 'Special Teams · Basis-Editor' : formation.label, style: const TextStyle(fontSize: 11, color: Colors.white54)),
         ]),
         actions: [
-          IconButton(
+          if (_isDefense) IconButton(
             tooltip: 'Coverage-Übersicht',
             icon: const Icon(Icons.assignment_outlined),
             onPressed: _showCoverageOverview,
           ),
           IconButton(tooltip: 'Formation', icon: const Icon(Icons.grid_view_rounded), onPressed: _openFormations),
-          IconButton(tooltip: 'Defense anzeigen', icon: Icon(showDefense ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-            onPressed: () => setState(() { showDefense = !showDefense; selected = null; })),
+          IconButton(tooltip: showDefense ? 'Gegner ausblenden' : 'Gegner einblenden', icon: Icon(showDefense ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+            onPressed: () => setState(() { showDefense = !showDefense; selected = null; targetMode = null; })),
         ],
       ),
       body: SafeArea(child: Column(children: [
@@ -1080,7 +1091,7 @@ class _PlayEditorState extends State<PlayEditor> {
     int? closest;
     var minDistance = 28.0;
     for (var i = 0; i < positions.length; i++) {
-      if (!showDefense && i >= 11) {
+      if (!_canSelect(i)) {
         continue;
       }
       final p = Offset(
