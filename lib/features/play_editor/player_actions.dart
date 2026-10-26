@@ -35,8 +35,8 @@ List<PlayerActionPreset> actionsForPlayer(int index, {bool isFullback = false}) 
       PlayerActionPreset('Reach Block innen', 'block', [Offset.zero, Offset(-.09, -.07)], mirror: true),
       PlayerActionPreset('Reach Block außen', 'block', [Offset.zero, Offset(.09, -.07)], mirror: true),
       PlayerActionPreset('Pass Protection', 'protection', [Offset.zero, Offset(0, .07)]),
-      PlayerActionPreset('Pull links', 'block', [Offset.zero, Offset(0, .09), Offset(-.20, .08), Offset(-.24, -.07)]),
-      PlayerActionPreset('Pull rechts', 'block', [Offset.zero, Offset(0, .09), Offset(.20, .08), Offset(.24, -.07)]),
+      PlayerActionPreset('Pull links', 'block', [Offset.zero, Offset(0, .045), Offset(-.055, .055), Offset(-.13, .045), Offset(-.17, -.045)]),
+      PlayerActionPreset('Pull rechts', 'block', [Offset.zero, Offset(0, .045), Offset(.055, .055), Offset(.13, .045), Offset(.17, -.045)]),
       PlayerActionPreset('Double Team', 'block', [Offset.zero, Offset(0, -.07)]),
     ];
   }

@@ -187,53 +187,126 @@ class _PlayEditorState extends State<PlayEditor> {
     final player = selected!;
     if (player >= 11) { await _showCoverageActions(player); return; }
     final presets = actionsForPlayer(player, isFullback: formation == OffenseFormation.iFormation);
+    final role = player == 5 ? 'Quarterback' : player <= 4 ? 'Offensive Line'
+        : player == 6 || (player == 10 && formation == OffenseFormation.iFormation)
+            ? 'Running Back / Fullback' : player == 9 ? 'Tight End' : 'Receiver';
+    String categoryOf(PlayerActionPreset preset) => switch (preset.kind) {
+      'route' => 'Passroute',
+      'run' => 'Laufweg',
+      'block' || 'protection' => 'Blocking',
+      'handoff' || 'pitch' || 'pass' => 'Ballaktion',
+      _ => 'Bewegung',
+    };
+    final groups = <String>[
+      for (final kind in ['Passroute', 'Laufweg', 'Blocking', 'Ballaktion', 'Bewegung'])
+        if (presets.any((p) => categoryOf(p) == kind)) kind,
+    ];
+    var group = groups.first;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.sizeOf(ctx).height * .64,
-          child: Column(children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text('Aktionen für ${player < 11 ? offenseLabelAt(player, formation) : defenseLabelsFor(defenseFormation)[player - 11]}',
-                  style: Theme.of(ctx).textTheme.titleLarge),
-            ),
-            Expanded(child: ListView.builder(
-              itemCount: presets.length,
-              itemBuilder: (ctx, index) {
-                final preset = presets[index];
-                return ListTile(
-                  title: Text(preset.label),
-                  subtitle: Text(preset.kind),
-                  leading: const Icon(Icons.alt_route),
-                  onTap: () {
-                    final mirror = preset.mirror && positions[player].dx < .5;
-                    final points = preset.points.map((p) => Offset(mirror ? -p.dx : p.dx, p.dy)).toList();
-                    final origin = positions[player];
-                    final maxX = points.fold<double>(0, (m, p) => p.dx > m ? p.dx : m);
-                    final minX = points.fold<double>(0, (m, p) => -p.dx > m ? -p.dx : m);
-                    var scale = 1.0;
-                    if (maxX > 0) scale = scale.clamp(0.0, (.97 - origin.dx) / maxX).toDouble();
-                    if (minX > 0) scale = scale.clamp(0.0, (origin.dx - .03) / minX).toDouble();
-                    setState(() {
-                      routes.removeWhere((r) => r.playerIndex == player && r.action == preset.kind);
-                      routes.add(PlayerRoute(
-                        playerIndex: player,
-                        name: preset.label,
-                        action: preset.kind,
-                        points: points.map((p) => Offset(p.dx * scale, p.dy)).toList(),
-                      ));
-                      draft.clear();
-                    });
-                    _saveRoutes();
-                    Navigator.pop(ctx);
-                  },
-                );
-              },
-            )),
-          ]),
-        ),
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF102219),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, updateSheet) {
+          final visible = presets.where((p) => categoryOf(p) == group).toList();
+          return FractionallySizedBox(
+            heightFactor: .72,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 12, 10),
+                child: Row(children: [
+                  const Icon(Icons.person_outline, color: Color(0xFF7BDCC0)),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(offenseLabelAt(player, formation),
+                      style: Theme.of(ctx).textTheme.titleLarge),
+                    Text(role, style: const TextStyle(color: Colors.white60)),
+                  ])),
+                  IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
+                ]),
+              ),
+              SizedBox(
+                height: 48,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [for (final item in groups)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(item),
+                        selected: group == item,
+                        onSelected: (_) => updateSheet(() => group = item),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 16),
+              Expanded(child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
+                itemCount: visible.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 4),
+                itemBuilder: (ctx, index) {
+                  final preset = visible[index];
+                  return Card(
+                    color: const Color(0xFF1B3428),
+                    child: ListTile(
+                      leading: Icon(
+                        group == 'Blocking' ? Icons.shield_outlined
+                          : group == 'Laufweg' ? Icons.directions_run
+                          : group == 'Ballaktion' ? Icons.sports_football
+                          : Icons.alt_route,
+                        color: const Color(0xFF7BDCC0),
+                      ),
+                      title: Text(preset.label),
+                      trailing: const Icon(Icons.add_circle_outline),
+                      onTap: () {
+                        final mirror = preset.mirror && positions[player].dx < .5;
+                        final points = preset.points.map((p) => Offset(mirror ? -p.dx : p.dx, p.dy)).toList();
+                        final origin = positions[player];
+                        final maxX = points.fold<double>(0, (m, p) => p.dx > m ? p.dx : m);
+                        final minX = points.fold<double>(0, (m, p) => -p.dx > m ? -p.dx : m);
+                        var scale = 1.0;
+                        if (maxX > 0) scale = scale.clamp(0.0, (.97 - origin.dx) / maxX).toDouble();
+                        if (minX > 0) scale = scale.clamp(0.0, (origin.dx - .03) / minX).toDouble();
+                        setState(() {
+                          routes.removeWhere((r) => r.playerIndex == player && r.action == preset.kind);
+                          routes.add(PlayerRoute(
+                            playerIndex: player,
+                            name: preset.label,
+                            action: preset.kind,
+                            points: points.map((p) => Offset(p.dx * scale, p.dy)).toList(),
+                          ));
+                          draft.clear();
+                        });
+                        _saveRoutes();
+                        Navigator.pop(ctx);
+                      },
+                    ),
+                  );
+                },
+              )),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+                child: SizedBox(width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      setState(() { toolsExpanded = true; routeMode = true; draft.clear(); });
+                    },
+                    icon: const Icon(Icons.draw_outlined),
+                    label: const Text('Eigene Bewegung zeichnen'),
+                  ),
+                ),
+              ),
+            ]),
+          );
+        },
       ),
     );
   }
@@ -859,6 +932,11 @@ class _PlayEditorState extends State<PlayEditor> {
             PopupMenuItem(value: 'defense', child: Text('Defense')),
             PopupMenuItem(value: 'blocking', child: Text('Blocking')),
           ],
+        ),
+        if (_isOffense && selected != null && selected! < 11) IconButton(
+          tooltip: 'Aufgabe für ausgewählten Offense-Spieler',
+          onPressed: _showPlayerActions,
+          icon: const Icon(Icons.add_task_outlined, color: Color(0xFF7BDCC0)),
         ),
         if (_isDefense && selected != null && selected! >= 11) IconButton(
           tooltip: 'Aufgabe für ausgewählten Verteidiger',
