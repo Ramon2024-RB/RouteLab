@@ -239,23 +239,97 @@ class _PlayEditorState extends State<PlayEditor> {
   }
 
   Future<void> _showCoverageActions(int player) async {
-    await showModalBottomSheet<void>(context: context, builder: (ctx) =>
-      SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        ListTile(title: Text('Defense: ${defenseLabelsFor(defenseFormation)[player - 11]}'),
-          subtitle: const Text('Coverage als echte Spieleraufgabe speichern')),
-        ListTile(leading: const Icon(Icons.person_search), title: const Text('Man Coverage zuweisen'),
-          subtitle: const Text('Danach den Gegenspieler auf dem Feld antippen'),
-          onTap: () { Navigator.pop(ctx); setState(() { targetMode = 'man'; routeMode = false; toolsExpanded = false; });
-            _message('Jetzt den zu deckenden Offense-Spieler antippen.'); }),
-        ListTile(leading: const Icon(Icons.layers_outlined), title: const Text('Zone Coverage zuweisen'),
-          subtitle: const Text('Zonenbereich auswählen und speichern'),
-          onTap: () { Navigator.pop(ctx); _chooseCoverageZone(player); }),
-        ListTile(leading: const Icon(Icons.directions_run), title: const Text('Blitz / Run Fit'),
-          onTap: () { Navigator.pop(ctx); _showDefenseMovementActions(player); }),
-        if (coverages.any((c) => c.defenderIndex == player))
-          ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Coverage-Aufgabe entfernen'),
-            onTap: () { Navigator.pop(ctx); setState(() => coverages.removeWhere((c) => c.defenderIndex == player)); _saveCoverages(); }),
-      ])),
+    final position = defenseLabelsFor(defenseFormation)[player - 11];
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          child: Column(mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('$position · Assignment',
+              style: Theme.of(ctx).textTheme.titleLarge),
+            const SizedBox(height: 6),
+            const Text('Wähle die Aufgabe dieses Verteidigers.',
+              style: TextStyle(color: Colors.white60)),
+            const SizedBox(height: 18),
+            Row(children: [
+              Expanded(child: _assignmentChoice(
+                icon: Icons.layers_outlined, label: 'Zone',
+                description: 'Bereich auf dem Feld',
+                onTap: () { Navigator.pop(ctx); _chooseCoverageZone(player); },
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: _assignmentChoice(
+                icon: Icons.person_search, label: 'Man',
+                description: 'Gegenspieler zuweisen',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  setState(() {
+                    targetMode = 'man';
+                    routeMode = false;
+                    toolsExpanded = false;
+                    showDefense = true; // Show the offense to choose a target.
+                  });
+                  _message('Offense eingeblendet: Gegenspieler antippen.');
+                },
+              )),
+            ]),
+            const SizedBox(height: 10),
+            _assignmentChoice(
+              icon: Icons.directions_run, label: 'Blitz / Run Fit',
+              description: 'Bewegung oder Angriffspfad festlegen',
+              onTap: () { Navigator.pop(ctx); _showDefenseMovementActions(player); },
+            ),
+            if (coverages.any((c) => c.defenderIndex == player)) ...[
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                title: const Text('Coverage-Aufgabe entfernen'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  setState(() => coverages.removeWhere((c) => c.defenderIndex == player));
+                  _saveCoverages();
+                },
+              ),
+            ],
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _assignmentChoice({
+    required IconData icon,
+    required String label,
+    required String description,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: const Color(0xFF183629),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(children: [
+            Icon(icon, color: const Color(0xFF7BDCC0)),
+            const SizedBox(width: 10),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(description, style: const TextStyle(
+                  fontSize: 11, color: Colors.white60)),
+              ],
+            )),
+          ]),
+        ),
+      ),
     );
   }
 
@@ -785,6 +859,11 @@ class _PlayEditorState extends State<PlayEditor> {
             PopupMenuItem(value: 'defense', child: Text('Defense')),
             PopupMenuItem(value: 'blocking', child: Text('Blocking')),
           ],
+        ),
+        if (_isDefense && selected != null && selected! >= 11) IconButton(
+          tooltip: 'Aufgabe für ausgewählten Verteidiger',
+          onPressed: _showPlayerActions,
+          icon: const Icon(Icons.add_task_outlined, color: Color(0xFF7BDCC0)),
         ),
         if (_isDefense) IconButton(
           tooltip: 'Coverage-Aufgaben aller Spieler',

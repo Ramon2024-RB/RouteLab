@@ -72,39 +72,71 @@ class FootballFieldPainter extends CustomPainter {
         }
         if (assignment.defenderIndex < 11 || assignment.defenderIndex >= positions.length) continue;
         final defender = positions[assignment.defenderIndex];
-        final color = Colors.primaries[(assignment.defenderIndex - 11) % Colors.primaries.length];
+        final isFocused = selected == assignment.defenderIndex;
+        const zoneColor = Color(0xFF7BDCC0);
         if (assignment.kind == 'zone' && assignment.zone != null) {
           final zone = assignment.zone!;
-          final rect = Rect.fromLTRB(zone.left * size.width, zone.top * size.height,
-            zone.right * size.width, zone.bottom * size.height);
-          canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)),
-            Paint()..color = color.withValues(alpha: .19));
-          canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)),
-            Paint()..color = color.withValues(alpha: .85)
-              ..style = PaintingStyle.stroke ..strokeWidth = 1.6);
-          final positionName = defenseLabelsFor(defenseFormation)[assignment.defenderIndex - 11];
-          final shortZone = (assignment.zoneName ?? 'Zone')
-              .replaceAll('Deep ', '')
-              .replaceAll('Left ', 'L ')
-              .replaceAll('Right ', 'R ')
-              .replaceAll('Middle ', 'M ')
-              .replaceAll('Third', '1/3')
-              .replaceAll('Half', '1/2')
-              .replaceAll('Quarter', '1/4');
-          final label = '$positionName · $shortZone';
-          final paragraph = TextPainter(text: TextSpan(text: label,
-            style: const TextStyle(color: Colors.white, fontSize: 10,
-              fontWeight: FontWeight.w600, shadows: [Shadow(blurRadius: 3, color: Colors.black)])),
-            textDirection: TextDirection.ltr, maxLines: 2, ellipsis: '…')
-            ..layout(maxWidth: rect.width.clamp(20.0, size.width));
-          paragraph.paint(canvas, rect.topLeft + const Offset(5, 5));
-        } else if (assignment.kind == 'man' && assignment.receiverIndex != null &&
+          final rect = Rect.fromLTRB(
+            zone.left * size.width, zone.top * size.height,
+            zone.right * size.width, zone.bottom * size.height,
+          );
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(rect, const Radius.circular(5)),
+            Paint()..color = zoneColor.withValues(alpha: isFocused ? .17 : .045),
+          );
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(rect, const Radius.circular(5)),
+            Paint()
+              ..color = zoneColor.withValues(alpha: isFocused ? .95 : .32)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = isFocused ? 2.3 : 1,
+          );
+          // Only the selected player's assignment gets an on-field label.
+          // All other player/zone pairs remain readable in Coverage-Übersicht.
+          if (isFocused) {
+            final positionName =
+                defenseLabelsFor(defenseFormation)[assignment.defenderIndex - 11];
+            final shortZone = (assignment.zoneName ?? 'Zone')
+                .replaceAll('Deep ', '')
+                .replaceAll('Left ', 'L ')
+                .replaceAll('Right ', 'R ')
+                .replaceAll('Middle ', 'M ')
+                .replaceAll('Third', '1/3')
+                .replaceAll('Half', '1/2')
+                .replaceAll('Quarter', '1/4');
+            final text = TextPainter(
+              text: TextSpan(
+                text: '$positionName · $shortZone',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              textDirection: TextDirection.ltr,
+              maxLines: 1,
+              ellipsis: '…',
+            )..layout(maxWidth: size.width - 16);
+            final labelWidth = text.width + 16;
+            final left = (rect.center.dx - labelWidth / 2)
+                .clamp(4.0, (size.width - labelWidth - 4).clamp(4.0, size.width));
+            final top = (rect.top + 6).clamp(4.0, size.height - 25);
+            canvas.drawRRect(
+              RRect.fromRectAndRadius(
+                Rect.fromLTWH(left, top, labelWidth, 22),
+                const Radius.circular(7),
+              ),
+              Paint()..color = const Color(0xEE10291F),
+            );
+            text.paint(canvas, Offset(left + 8, top + 4));
+          }
+        } else if (showOffense && assignment.kind == 'man' && assignment.receiverIndex != null &&
             assignment.receiverIndex! >= 0 && assignment.receiverIndex! < 11) {
           final receiver = positions[assignment.receiverIndex!];
           final start = Offset(defender.dx * size.width, defender.dy * size.height);
           final end = Offset(receiver.dx * size.width, receiver.dy * size.height);
-          final stroke = Paint()..color = const Color(0xFF80E5FF)
-            ..strokeWidth = 2 ..style = PaintingStyle.stroke;
+          final stroke = Paint()..color = const Color(0xFF7BDCC0)
+            ..strokeWidth = isFocused ? 2.2 : 1.3 ..style = PaintingStyle.stroke;
           final delta = end - start;
           if (delta.distance > 0) {
             final unit = delta / delta.distance;
@@ -113,7 +145,7 @@ class FootballFieldPainter extends CustomPainter {
                 start + unit * (d + 6).clamp(0.0, delta.distance), stroke);
             }
           }
-          canvas.drawCircle(end, 20, Paint()..color = const Color(0xFF80E5FF)
+          canvas.drawCircle(end, 20, Paint()..color = const Color(0xFF7BDCC0)
             ..style = PaintingStyle.stroke ..strokeWidth = 2);
         }
       }
@@ -177,6 +209,16 @@ class FootballFieldPainter extends CustomPainter {
         Paint()
           ..color = i < 11 ? const Color(0xFF238EF5) : const Color(0xFFF15C5C),
       );
+      if (i >= 11 && coverages.any((c) => c.defenderIndex == i)) {
+        canvas.drawCircle(
+          p,
+          18,
+          Paint()
+            ..color = const Color(0xFF7BDCC0)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = selected == i ? 2.8 : 1.5,
+        );
+      }
       final label = i < 11
           ? offenseLabelAt(i, offenseFormation)
           : defenseLabelsFor(defenseFormation)[i - 11];
