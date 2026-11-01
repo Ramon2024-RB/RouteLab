@@ -8,7 +8,17 @@ class OffensePersonnel {
 
   static const editablePlayers = <int>[6, 7, 8, 9, 10];
 
-  static const availableRoles = <String>['X', 'Z', 'Y', 'H', 'RB', 'HB', 'FB'];
+  static const availableRoles = [
+    'X',
+    'Z',
+    'Y',
+    'H',
+    'U',
+    'W',
+    'RB',
+    'HB',
+    'FB',
+  ];
 
   static bool isBack(String role) {
     return role == 'RB' || role == 'HB' || role == 'FB';

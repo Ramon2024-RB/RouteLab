@@ -258,6 +258,31 @@ class _PlayEditorState extends State<PlayEditor> {
     _saveRoutes();
   }
 
+  static const _packages = <String, List<String>>{
+    '10': ['RB', 'X', 'Z', 'W', 'H'],
+    '11': ['RB', 'X', 'Z', 'Y', 'H'],
+    '12': ['RB', 'X', 'Z', 'Y', 'U'],
+    '20': ['RB', 'X', 'Z', 'HB', 'H'],
+    '21': ['RB', 'X', 'Z', 'Y', 'HB'],
+    '22': ['RB', 'X', 'HB', 'Y', 'U'],
+  };
+
+  void _applyPackage(String code) {
+    final labels = _packages[code]!;
+    setState(() {
+      for (var i = 0; i < 5; i++) {
+        final index = i + 6;
+        final old = OffensePersonnel.labelAt(index, formation, routes);
+        final next = labels[i];
+        OffensePersonnel.assignRole(routes, index, next);
+        _movePersonnelSlot(index, old, next);
+      }
+      draft.clear();
+    });
+    _savePositions();
+    _saveRoutes();
+  }
+
   Future<void> _openPersonnel() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -282,6 +307,21 @@ class _PlayEditorState extends State<PlayEditor> {
                   'verschoben.',
                 ),
                 const SizedBox(height: 20),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final code in _packages.keys)
+                      ActionChip(
+                        label: Text('$code Personnel'),
+                        onPressed: () {
+                          _applyPackage(code);
+                          refresh(() {});
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 18),
                 for (final index in OffensePersonnel.editablePlayers)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
@@ -345,7 +385,7 @@ class _PlayEditorState extends State<PlayEditor> {
     final actionIndex = player >= 6 && player <= 10
         ? (OffensePersonnel.isBack(skillRole)
               ? 6
-              : skillRole == 'Y'
+              : (['Y', 'U'].contains(skillRole))
               ? 9
               : 7)
         : player;
@@ -356,7 +396,7 @@ class _PlayEditorState extends State<PlayEditor> {
         ? 'Quarterback'
         : OffensePersonnel.isBack(skillRole)
         ? 'Running Back / Fullback'
-        : skillRole == 'Y'
+        : (['Y', 'U'].contains(skillRole))
         ? 'Tight End'
         : 'Receiver';
     String categoryOf(PlayerActionPreset preset) => switch (preset.kind) {
