@@ -9,6 +9,8 @@ import 'formations/offense_formations.dart';
 import 'formations/defense_formations.dart';
 import 'painters/football_field_painter.dart';
 import 'player_actions.dart';
+import 'offense_personnel.dart';
+import 'individual_block_editor.dart';
 import 'run_play_designer.dart';
 import 'blocking_designer.dart';
 
@@ -57,7 +59,8 @@ class _PlayEditorState extends State<PlayEditor> {
   bool focusSelected = false;
   bool toolsExpanded = false;
   String drawingAction = 'route';
-  String? targetMode; // 'block' or 'handoff' while selecting another player.
+  String? targetMode;
+  String? _pendingBlockTechnique; // 'block' or 'handoff' while selecting another player.
   final List<Offset> draft = [];
   late final List<PlayerRoute> routes;
   late final List<CoverageAssignment> coverages;
@@ -213,28 +216,147 @@ class _PlayEditorState extends State<PlayEditor> {
     _saveRoutes();
   }
 
+  void _movePersonnelSlot(int index, String previous, String next) {
+    if (OffensePersonnel.isBack(previous) == OffensePersonnel.isBack(next)) {
+      return;
+    }
+
+    positions[index] = OffensePersonnel.positionFor(index, next);
+  }
+
+  void _changePersonnelRole(int player, String nextRole) {
+    final previous = OffensePersonnel.labelAt(player, formation, routes);
+
+    if (previous == nextRole) return;
+
+    int? occupied;
+
+    for (final other in OffensePersonnel.editablePlayers) {
+      if (other == player) continue;
+
+      if (OffensePersonnel.labelAt(other, formation, routes) == nextRole) {
+        occupied = other;
+        break;
+      }
+    }
+
+    setState(() {
+      if (occupied != null) {
+        OffensePersonnel.assignRole(routes, occupied, previous);
+
+        _movePersonnelSlot(occupied, nextRole, previous);
+      }
+
+      OffensePersonnel.assignRole(routes, player, nextRole);
+
+      _movePersonnelSlot(player, previous, nextRole);
+
+      draft.clear();
+    });
+
+    _savePositions();
+    _saveRoutes();
+  }
+
+  Future<void> _openPersonnel() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (ctx, refresh) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(ctx).height * .64,
+            child: ListView(
+              padding: const EdgeInsets.all(18),
+              children: [
+                Text(
+                  'Offense Personal',
+                  style: Theme.of(ctx).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'X, Z, Y und H oder zusätzliche '
+                  'Running Backs auswählen. '
+                  'Ein HB oder FB wird ins Backfield '
+                  'verschoben.',
+                ),
+                const SizedBox(height: 20),
+                for (final index in OffensePersonnel.editablePlayers)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: DropdownButtonFormField<String>(
+                      key: ValueKey(
+                        'personal_${index}_'
+                        '${OffensePersonnel.labelAt(index, formation, routes)}',
+                      ),
+                      initialValue: OffensePersonnel.labelAt(
+                        index,
+                        formation,
+                        routes,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Spieler ${index + 1}',
+                        border: const OutlineInputBorder(),
+                      ),
+                      items: [
+                        for (final role in OffensePersonnel.availableRoles)
+                          DropdownMenuItem(value: role, child: Text(role)),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+
+                        refresh(() {
+                          _changePersonnelRole(index, value);
+                        });
+                      },
+                    ),
+                  ),
+                const Text(
+                  'Bereits vorhandene Routen '
+                  'werden beim Rollenwechsel '
+                  'nicht gelöscht.',
+                  style: TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showPlayerActions() async {
     if (selected == null) {
       _message('Wähle zuerst einen Spieler aus.');
       return;
     }
     final player = selected!;
+
+    if (player <= 4 && _isOffense) {
+      await _showIndividualBlockingEditor(player);
+      return;
+    }
     if (player >= 11) {
       await _showCoverageActions(player);
       return;
     }
-    final presets = actionsForPlayer(
-      player,
-      isFullback: formation == OffenseFormation.iFormation,
-    );
-    final role = player == 5
-        ? 'Quarterback'
-        : player <= 4
+    final skillRole = OffensePersonnel.labelAt(player, formation, routes);
+    final actionIndex = player >= 6 && player <= 10
+        ? (OffensePersonnel.isBack(skillRole)
+              ? 6
+              : skillRole == 'Y'
+              ? 9
+              : 7)
+        : player;
+    final presets = actionsForPlayer(actionIndex, isFullback: false);
+    final role = player <= 4
         ? 'Offensive Line'
-        : player == 6 ||
-              (player == 10 && formation == OffenseFormation.iFormation)
+        : player == 5
+        ? 'Quarterback'
+        : OffensePersonnel.isBack(skillRole)
         ? 'Running Back / Fullback'
-        : player == 9
+        : skillRole == 'Y'
         ? 'Tight End'
         : 'Receiver';
     String categoryOf(PlayerActionPreset preset) => switch (preset.kind) {
@@ -254,9 +376,7 @@ class _PlayEditorState extends State<PlayEditor> {
       ])
         if (presets.any((p) => categoryOf(p) == kind)) kind,
     ];
-    final isRunner =
-        player == 6 ||
-        (player == 10 && formation == OffenseFormation.iFormation);
+    final isRunner = OffensePersonnel.isBack(skillRole);
     var group = isRunner ? 'Laufweg' : groups.first;
     await showModalBottomSheet<void>(
       context: context,
@@ -288,7 +408,11 @@ class _PlayEditorState extends State<PlayEditor> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              offenseLabelAt(player, formation),
+                              OffensePersonnel.labelAt(
+                                player,
+                                formation,
+                                routes,
+                              ),
                               style: Theme.of(ctx).textTheme.titleLarge,
                             ),
                             Text(
@@ -342,6 +466,7 @@ class _PlayEditorState extends State<PlayEditor> {
                                   name: result.label,
                                   action: 'run',
                                   points: result.points,
+                                  smooth: true,
                                 ),
                               );
                               // Vorherige automatisch erzeugte Blocks entfernen.
@@ -382,8 +507,68 @@ class _PlayEditorState extends State<PlayEditor> {
                                 }
                               }
 
+                              // V3.1: Fehlende OL-Blocks sicher ergänzen.
+                              if (result.withBlocking) {
+                                final expectedBlocks =
+                                    BlockingDesigner.generate(
+                                      positions: positions,
+                                      concept: result.concept,
+                                      direction: result.direction,
+                                      gap: result.gap,
+                                    );
+
+                                for (final assignment in expectedBlocks) {
+                                  final alreadyAssigned = routes.any(
+                                    (route) =>
+                                        route.playerIndex ==
+                                            assignment.playerIndex &&
+                                        route.action == 'block',
+                                  );
+
+                                  if (!alreadyAssigned) {
+                                    routes.add(
+                                      PlayerRoute(
+                                        playerIndex: assignment.playerIndex,
+                                        action: 'block',
+                                        name: 'Auto Block · ${assignment.name}',
+                                        points: assignment.points,
+                                      ),
+                                    );
+                                  }
+                                }
+                              }
+
                               draft.clear();
                             });
+                            setState(() {
+                              routes.removeWhere(
+                                (r) =>
+                                    r.playerIndex == 5 &&
+                                    r.action == 'pitch' &&
+                                    r.name.startsWith('Auto Pitch · '),
+                              );
+
+                              if (result.delivery == RunDelivery.pitch &&
+                                  result.points.length >= 3) {
+                                final catchPoint =
+                                    positions[player] + result.points[2];
+
+                                routes.add(
+                                  PlayerRoute(
+                                    playerIndex: 5,
+                                    targetIndex: player,
+                                    action: 'pitch',
+                                    name:
+                                        'Auto Pitch · ${OffensePersonnel.labelAt(player, formation, routes)}',
+                                    points: [
+                                      Offset.zero,
+                                      catchPoint - positions[5],
+                                    ],
+                                  ),
+                                );
+                              }
+                            });
+
                             _saveRoutes();
                             Navigator.pop(ctx);
                           },
@@ -489,6 +674,58 @@ class _PlayEditorState extends State<PlayEditor> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Future<void> _showIndividualBlockingEditor(int player) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF102219),
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: .73,
+        child: IndividualBlockEditor(
+          playerIndex: player,
+          positions: positions,
+          onApply: (result) {
+            Navigator.pop(sheetContext);
+
+            if (result.chooseTarget) {
+              setState(() {
+                selected = player;
+                showDefense = true;
+                viewFilter = 'all';
+                focusSelected = false;
+                _pendingBlockTechnique = result.techniqueName;
+              });
+
+              _startTargetAssignment('block');
+              return;
+            }
+
+            setState(() {
+              routes.removeWhere(
+                (route) =>
+                    route.playerIndex == player && route.action == 'block',
+              );
+
+              routes.add(
+                PlayerRoute(
+                  playerIndex: player,
+                  action: 'block',
+                  name: 'Manuell · ${result.techniqueName}',
+                  points: result.points,
+                ),
+              );
+
+              draft.clear();
+            });
+
+            _saveRoutes();
+          },
+        ),
       ),
     );
   }
@@ -936,11 +1173,16 @@ class _PlayEditorState extends State<PlayEditor> {
           playerIndex: source,
           action: kind,
           targetIndex: target,
-          name: kind == 'block' ? 'Blockziel' : 'Handoff',
+          name: kind == 'block'
+              ? (_pendingBlockTechnique == null
+                    ? 'Blockziel'
+                    : 'Manuell · $_pendingBlockTechnique · Blockziel')
+              : 'Handoff',
           points: [Offset.zero, destination - origin],
         ),
       );
       targetMode = null;
+      _pendingBlockTechnique = null;
     });
     _saveRoutes();
   }
@@ -973,7 +1215,9 @@ class _PlayEditorState extends State<PlayEditor> {
 
   Future<void> _saveTemplate() async {
     if (selected == null) return;
-    final existing = routes.where((r) => r.playerIndex == selected).toList();
+    final existing = routes
+        .where((r) => r.playerIndex == selected && r.action != 'personnel')
+        .toList();
     final points = draft.length >= 2
         ? List<Offset>.from(draft)
         : existing.isNotEmpty
@@ -1061,7 +1305,9 @@ class _PlayEditorState extends State<PlayEditor> {
     if (selected == null) return standardRoutes;
     final i = selected!;
     if (i >= 11 || i <= 4 || i == 5) return [];
-    if (i == 6 || (formation == OffenseFormation.iFormation && i == 10)) {
+    if (OffensePersonnel.isBack(
+      OffensePersonnel.labelAt(i, formation, routes),
+    )) {
       const names = {
         'Flat',
         'Wheel',
@@ -1153,7 +1399,9 @@ class _PlayEditorState extends State<PlayEditor> {
 
   String get _selectedLabel {
     if (selected == null) return 'Spieler auswählen';
-    if (selected! < 11) return offenseLabelAt(selected!, formation);
+    if (selected! < 11) {
+      return OffensePersonnel.labelAt(selected!, formation, routes);
+    }
     return defenseLabelsFor(defenseFormation)[selected! - 11];
   }
 
@@ -1367,7 +1615,11 @@ class _PlayEditorState extends State<PlayEditor> {
     final accent = Theme.of(context).colorScheme.primary;
     final count = selected == null
         ? 0
-        : routes.where((r) => r.playerIndex == selected).length;
+        : routes
+              .where(
+                (r) => r.playerIndex == selected && r.action != 'personnel',
+              )
+              .length;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
       decoration: const BoxDecoration(
@@ -1469,7 +1721,11 @@ class _PlayEditorState extends State<PlayEditor> {
     final accent = Theme.of(context).colorScheme.primary;
     final actions = selected == null
         ? <PlayerRoute>[]
-        : routes.where((r) => r.playerIndex == selected).toList();
+        : routes
+              .where(
+                (r) => r.playerIndex == selected && r.action != 'personnel',
+              )
+              .toList();
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
@@ -1903,7 +2159,11 @@ class _PlayEditorState extends State<PlayEditor> {
                               receiver != null &&
                               receiver >= 0 &&
                               receiver < 11
-                          ? offenseLabelAt(receiver, formation)
+                          ? OffensePersonnel.labelAt(
+                              receiver,
+                              formation,
+                              routes,
+                            )
                           : 'nicht zugewiesen';
                       final description = isMan
                           ? 'Man Coverage → $targetName'
@@ -1992,6 +2252,12 @@ class _PlayEditorState extends State<PlayEditor> {
           ],
         ),
         actions: [
+          if (_isOffense)
+            IconButton(
+              tooltip: 'Offense Personal',
+              icon: const Icon(Icons.people_outline),
+              onPressed: _openPersonnel,
+            ),
           if (_isDefense)
             IconButton(
               tooltip: 'Coverage-Übersicht',

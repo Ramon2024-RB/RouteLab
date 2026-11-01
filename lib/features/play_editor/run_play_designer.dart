@@ -38,6 +38,8 @@ extension RunGapLabel on RunGap {
   };
 }
 
+enum RunDelivery { handoff, pitch }
+
 class RunPlayResult {
   const RunPlayResult({
     required this.label,
@@ -46,6 +48,7 @@ class RunPlayResult {
     required this.direction,
     required this.gap,
     required this.withBlocking,
+    this.delivery = RunDelivery.handoff,
   });
 
   final String label;
@@ -54,6 +57,7 @@ class RunPlayResult {
   final RunDirection direction;
   final RunGap gap;
   final bool withBlocking;
+  final RunDelivery delivery;
 }
 
 class RunPlayDesigner extends StatefulWidget {
@@ -77,6 +81,7 @@ class _RunPlayDesignerState extends State<RunPlayDesigner> {
   RunDirection direction = RunDirection.right;
   RunGap gap = RunGap.auto;
   bool includeBlocking = true;
+  RunDelivery delivery = RunDelivery.handoff;
 
   RunGap get effectiveGap {
     if (gap != RunGap.auto) return gap;
@@ -94,14 +99,73 @@ class _RunPlayDesignerState extends State<RunPlayDesigner> {
     return Offset(x.clamp(.04, .96).toDouble(), y.clamp(.04, .96).toDouble());
   }
 
-  RunPlayResult _buildResult() {
+  // V3.2 - RB route geometry
+
+  List<Offset> _pitchRunPoints() {
     final start = widget.positions[widget.playerIndex];
+    final qb = widget.positions[5];
+    final side = direction == RunDirection.left ? -1.0 : 1.0;
+    final left = side < 0;
 
     final line = widget.positions.take(5).toList()
       ..sort((a, b) => a.dx.compareTo(b.dx));
 
-    final left = direction == RunDirection.left;
-    final sign = left ? -1.0 : 1.0;
+    final center = line[2];
+    final guard = line[left ? 1 : 3];
+    final tackle = line[left ? 0 : 4];
+    final lineY = line.map((p) => p.dy).reduce((a, b) => a + b) / 5;
+
+    final targetX = switch (effectiveGap) {
+      RunGap.a => (center.dx + guard.dx) / 2,
+      RunGap.b => (guard.dx + tackle.dx) / 2,
+      RunGap.c => tackle.dx + side * .055,
+      RunGap.d => tackle.dx + side * .13,
+      RunGap.auto => tackle.dx + side * .13,
+    };
+
+    // Punkt Nummer 2 ist der gemeinsame Pitch-Fangpunkt.
+    final catchPoint = _limited(qb.dx + side * .19, qb.dy + .075);
+
+    // Erst hinter dem Slot/H-Spieler nach außen,
+    // anschließend nach vorne zur Running Lane.
+    final outsideX =
+        (widget.positions
+                    .sublist(7, 11)
+                    .map((p) => p.dx)
+                    .reduce(
+                      (a, b) => left ? (a < b ? a : b) : (a > b ? a : b),
+                    ) +
+                side * .075)
+            .clamp(.06, .94)
+            .toDouble();
+    final rearY = (catchPoint.dy + .045).clamp(.06, .94).toDouble();
+
+    final absolute = <Offset>[
+      start,
+      _limited((start.dx + catchPoint.dx) / 2, (start.dy + catchPoint.dy) / 2),
+      catchPoint,
+      _limited((catchPoint.dx + outsideX) / 2, rearY),
+      _limited(outsideX, rearY),
+      _limited(outsideX, lineY + .07),
+      _limited(concept == RunConcept.sweep ? outsideX : targetX, lineY - .07),
+      _limited(concept == RunConcept.sweep ? outsideX : targetX, lineY - .25),
+    ];
+
+    return absolute.map((p) => p - start).toList();
+  }
+
+  RunPlayResult _buildResult() {
+    final start = widget.positions[widget.playerIndex];
+
+    final qb = widget.positions.length > 5
+        ? widget.positions[5]
+        : const Offset(.50, .76);
+
+    final line = widget.positions.take(5).toList()
+      ..sort((a, b) => a.dx.compareTo(b.dx));
+
+    final sign = direction == RunDirection.left ? -1.0 : 1.0;
+    final left = sign < 0;
 
     final center = line[2];
     final guard = line[left ? 1 : 3];
@@ -114,73 +178,117 @@ class _RunPlayDesignerState extends State<RunPlayDesigner> {
       RunGap.b => (guard.dx + tackle.dx) / 2,
       RunGap.c => tackle.dx + sign * .055,
       RunGap.d => tackle.dx + sign * .13,
-      RunGap.auto => center.dx,
+      RunGap.auto => (center.dx + guard.dx) / 2,
     };
 
     final target = targetX.clamp(.05, .95).toDouble();
 
+    // Der RB bleibt beim Release seitlich vom QB.
+    // Bereits versetzt aufgestellte RBs werden nicht
+    // unnötig zurück zur Spielfeldmitte geführt.
+    final qbClearX = qb.dx + sign * .115;
+    final playerReleaseX = start.dx + sign * .045;
+
+    final releaseX =
+        (left
+                ? (qbClearX < playerReleaseX ? qbClearX : playerReleaseX)
+                : (qbClearX > playerReleaseX ? qbClearX : playerReleaseX))
+            .clamp(.05, .95)
+            .toDouble();
+
     final points = <Offset>[start];
+
+    void normalRelease() {
+      final rearX = start.dx + (releaseX - start.dx) * .55;
+
+      points.add(_limited(rearX, start.dy - .035));
+
+      points.add(_limited(releaseX, qb.dy + .075));
+    }
 
     switch (concept) {
       case RunConcept.insideZone:
+        normalRelease();
+
         points.addAll([
-          _limited(start.dx + (target - start.dx) * .60, start.dy - .105),
-          _limited(target, lineY + .025),
-          _limited(target + sign * .015, lineY - .135),
-          _limited(target + sign * .025, lineY - .255),
+          _limited(releaseX, lineY + .11),
+          _limited(target, lineY + .015),
+          _limited(target, lineY - .13),
+          _limited(target + sign * .015, lineY - .25),
         ]);
 
       case RunConcept.outsideZone:
-        final stretchX = (target + sign * .045).clamp(.05, .95).toDouble();
+        normalRelease();
+
+        // Erst außerhalb des QB vorbeilaufen,
+        // danach vor den Slot-Spielern nach außen.
+        // So wird der linke/rechte WR nicht mehr
+        // direkt auf Backfield-Höhe gekreuzt.
+        final edge =
+            (tackle.dx + sign * (effectiveGap == RunGap.d ? .16 : .105))
+                .clamp(.05, .95)
+                .toDouble();
+
         points.addAll([
-          _limited(start.dx + sign * .065, start.dy - .055),
-          _limited(stretchX, lineY + .09),
-          _limited(target, lineY - .045),
-          _limited(target + sign * .025, lineY - .23),
+          _limited(releaseX, lineY + .105),
+          _limited(edge, lineY + .005),
+          _limited(target, lineY - .105),
+          _limited(target, lineY - .25),
         ]);
 
       case RunConcept.power:
+        normalRelease();
+
         points.addAll([
-          _limited(start.dx + (target - start.dx) * .45, start.dy - .075),
-          _limited(target, lineY + .045),
-          _limited(target, lineY - .095),
-          _limited(target + sign * .02, lineY - .245),
+          _limited(releaseX, lineY + .105),
+          _limited(target, lineY + .02),
+          _limited(target, lineY - .12),
+          _limited(target + sign * .015, lineY - .25),
         ]);
 
       case RunConcept.counter:
+        // Statt eines kurzen, kantigen Hakens:
+        // ein sichtbarer, kleiner False Step und
+        // eine fließende Gegenbewegung.
         points.addAll([
-          _limited(start.dx - sign * .07, start.dy + .005),
-          _limited(start.dx - sign * .045, start.dy - .075),
-          _limited(target, lineY + .055),
-          _limited(target, lineY - .11),
-          _limited(target + sign * .015, lineY - .245),
+          _limited(start.dx - sign * .035, start.dy - .025),
+          _limited(start.dx - sign * .025, start.dy - .075),
+          _limited(releaseX, qb.dy + .015),
+          _limited(releaseX, lineY + .105),
+          _limited(target, lineY + .015),
+          _limited(target, lineY - .12),
+          _limited(target + sign * .015, lineY - .25),
         ]);
 
       case RunConcept.sweep:
-        final edgeX = (tackle.dx + sign * .155).clamp(.05, .95).toDouble();
+        normalRelease();
+
+        final edge = (tackle.dx + sign * .18).clamp(.05, .95).toDouble();
+
         points.addAll([
-          _limited(start.dx + sign * .105, start.dy - .025),
-          _limited(edgeX, lineY + .115),
-          _limited(edgeX, lineY - .025),
-          _limited(target, lineY - .115),
-          _limited(target + sign * .025, lineY - .25),
+          _limited(releaseX, lineY + .11),
+          _limited(edge, lineY + .01),
+          _limited(edge, lineY - .12),
+          _limited(edge, lineY - .25),
         ]);
     }
 
+    // Die Daten bleiben im bestehenden relativen
+    // PlayerRoute-Format gespeichert.
     final relative = points
         .map((p) => Offset(p.dx - start.dx, p.dy - start.dy))
         .toList();
 
-    final label =
-        '${concept.label} · ${direction.label} · ${effectiveGap.label}-Gap';
-
     return RunPlayResult(
-      label: label,
-      points: relative,
+      label: delivery == RunDelivery.pitch
+          ? 'Toss · ${concept.label} · ${direction.label} · ${effectiveGap.label}-Gap'
+          : '${concept.label} · ${direction.label} · ${effectiveGap.label}-Gap',
+      points: delivery == RunDelivery.pitch ? _pitchRunPoints() : relative,
       concept: concept,
       direction: direction,
       gap: effectiveGap,
       withBlocking: includeBlocking,
+      delivery: delivery,
     );
   }
 
@@ -277,6 +385,22 @@ class _RunPlayDesignerState extends State<RunPlayDesigner> {
               ),
           ],
         ),
+        const SizedBox(height: 12),
+        _sectionTitle('4. Ballübergabe'),
+        SegmentedButton<RunDelivery>(
+          segments: const [
+            ButtonSegment(value: RunDelivery.handoff, label: Text('Handoff')),
+            ButtonSegment(
+              value: RunDelivery.pitch,
+              label: Text('Pitch / Toss'),
+            ),
+          ],
+          selected: {delivery},
+          onSelectionChanged: (value) {
+            setState(() => delivery = value.first);
+          },
+        ),
+        const SizedBox(height: 16),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
           title: const Text(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../formations/offense_formations.dart';
+import '../offense_personnel.dart';
 import '../../../data/models/route_model.dart';
 import '../../../data/models/coverage_assignment.dart';
 import '../formations/defense_formations.dart';
@@ -267,12 +268,22 @@ class FootballFieldPainter extends CustomPainter {
           start.dy * size.height,
         );
 
-        final endPixel = Offset(end.dx * size.width, end.dy * size.height);
+        final endPixel = route.action == 'pitch' && route.points.isNotEmpty
+            ? Offset(
+                (start.dx + route.points.last.dx) * size.width,
+                (start.dy + route.points.last.dy) * size.height,
+              )
+            : Offset(end.dx * size.width, end.dy * size.height);
 
         if (route.action == 'block') {
           _drawBlockAssignment(canvas, startPixel, endPixel);
-        } else if (route.action == 'handoff') {
-          _drawHandoff(canvas, startPixel, endPixel);
+        } else if (route.action == 'handoff' || route.action == 'pitch') {
+          _drawHandoff(
+            canvas,
+            startPixel,
+            endPixel,
+            pitch: route.action == 'pitch',
+          );
         } else {
           _drawBlockAssignment(canvas, startPixel, endPixel);
         }
@@ -290,6 +301,8 @@ class FootballFieldPainter extends CustomPainter {
             _actionColor(route.action, route.playerIndex),
             dashed: route.action == 'coverage' || route.action == 'movement',
             smooth: route.smooth,
+            followWaypoints:
+                route.action == 'run' && route.name.startsWith('Toss · '),
           );
         }
       }
@@ -344,7 +357,7 @@ class FootballFieldPainter extends CustomPainter {
       }
 
       final label = i < 11
-          ? offenseLabelAt(i, offenseFormation)
+          ? OffensePersonnel.labelAt(i, offenseFormation, routes)
           : defenseLabelsFor(defenseFormation)[i - 11];
 
       final textPainter = TextPainter(
@@ -389,7 +402,12 @@ class FootballFieldPainter extends CustomPainter {
     _drawBlockCap(canvas, end, unit, paint, width: 9);
   }
 
-  void _drawHandoff(Canvas canvas, Offset from, Offset to) {
+  void _drawHandoff(
+    Canvas canvas,
+    Offset from,
+    Offset to, {
+    bool pitch = false,
+  }) {
     final delta = to - from;
 
     if (delta.distance < 38) {
@@ -398,7 +416,7 @@ class FootballFieldPainter extends CustomPainter {
 
     final unit = delta / delta.distance;
     final start = from + unit * 18;
-    final end = to - unit * 18;
+    final end = pitch ? to : to - unit * 18;
 
     final paint = Paint()
       ..color = const Color(0xFFF2F5F0)
@@ -415,7 +433,7 @@ class FootballFieldPainter extends CustomPainter {
       );
     }
 
-    final mid = (start + end) / 2;
+    final mid = pitch ? to : (start + end) / 2;
 
     canvas.drawOval(
       Rect.fromCenter(center: mid, width: 12, height: 7),
@@ -430,20 +448,15 @@ class FootballFieldPainter extends CustomPainter {
     Offset origin,
     PlayerRoute route,
   ) {
-    if (route.points.length < 2) {
-      return;
-    }
+    if (route.points.length < 2) return;
 
     final name = route.name.toLowerCase();
 
-    // Pulling Guards sind echte Bewegungswege.
-    // Sie bekommen eine Kurve und am Ende einen Blockbalken.
     if (name.contains('pull')) {
       _drawPullBlockingPath(canvas, size, origin, route.points);
       return;
     }
 
-    // Andere Bewegungen behalten die bisherige Darstellung.
     if (name.contains('release') || name.contains('lead')) {
       _drawRoute(
         canvas,
@@ -462,44 +475,50 @@ class FootballFieldPainter extends CustomPainter {
     );
 
     final start = pixel(route.points.first);
-    final destination = pixel(route.points.last);
-    final delta = destination - start;
+    final target = pixel(route.points.last);
+    final delta = target - start;
 
-    if (delta.distance < 15) {
-      return;
-    }
+    if (delta.distance < 12) return;
 
     final unit = delta / delta.distance;
 
-    // Die verschiedenen Blocktypen erhalten leicht
-    // unterschiedliche Linienlängen und Balkenbreiten.
-    final double maximumLength;
+    final double length;
     final double capWidth;
 
     if (name.contains('reach')) {
-      maximumLength = 51;
-      capWidth = 11;
+      length = 39;
+      capWidth = 7.5;
     } else if (name.contains('seal')) {
-      maximumLength = 52;
-      capWidth = 12;
+      length = 40;
+      capWidth = 8;
     } else if (name.contains('down')) {
-      maximumLength = 39;
-      capWidth = 9;
+      length = 34;
+      capWidth = 7;
     } else if (name.contains('zone')) {
-      maximumLength = 43;
-      capWidth = 10;
+      length = 35;
+      capWidth = 7;
     } else if (name.contains('protection')) {
-      maximumLength = 36;
-      capWidth = 11;
+      length = 31;
+      capWidth = 8;
     } else {
-      maximumLength = 46;
-      capWidth = 9;
+      length = 36;
+      capWidth = 7.5;
     }
 
-    final startStroke = start + unit * 17;
+    var distance = delta.distance.clamp(22.0, length).toDouble();
 
-    final endStroke =
-        start + unit * delta.distance.clamp(28.0, maximumLength).toDouble();
+    // Abstand zur gelben Line of Scrimmage halten.
+    if (unit.dy < -.01) {
+      final lowerLimit = size.height * .54 + 13;
+      final allowed = (lowerLimit - start.dy) / unit.dy;
+
+      if (allowed > 22 && allowed < distance) {
+        distance = allowed;
+      }
+    }
+
+    final from = start + unit * 17;
+    final to = start + unit * distance;
 
     final paint = Paint()
       ..color = _blockColor
@@ -507,12 +526,11 @@ class FootballFieldPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
-    canvas.drawLine(startStroke, endStroke, paint);
+    canvas.drawLine(from, to, paint);
 
-    _drawBlockCap(canvas, endStroke, unit, paint, width: capWidth);
+    _drawBlockCap(canvas, to, unit, paint, width: capWidth);
   }
 
-  // V2: Weicher Pull-Weg mit T-Abschluss statt Laufpfeil.
   void _drawPullBlockingPath(
     Canvas canvas,
     Size size,
@@ -607,6 +625,7 @@ class FootballFieldPainter extends CustomPainter {
     Color color, {
     bool dashed = false,
     bool smooth = false,
+    bool followWaypoints = false,
   }) {
     if (points.length < 2) {
       return;
@@ -623,7 +642,19 @@ class FootballFieldPainter extends CustomPainter {
 
     path.moveTo(pixels.first.dx, pixels.first.dy);
 
-    if (smooth && pixels.length > 2) {
+    if (smooth && followWaypoints && pixels.length > 2) {
+      // Kurve verläuft exakt durch alle Wegpunkte,
+      // einschließlich des Pitch-Fangpunkts.
+      for (var i = 0; i < pixels.length - 1; i++) {
+        final p0 = pixels[i == 0 ? i : i - 1];
+        final p1 = pixels[i];
+        final p2 = pixels[i + 1];
+        final p3 = pixels[i + 2 < pixels.length ? i + 2 : i + 1];
+        final c1 = p1 + (p2 - p0) / 6;
+        final c2 = p2 - (p3 - p1) / 6;
+        path.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, p2.dx, p2.dy);
+      }
+    } else if (smooth && pixels.length > 2) {
       for (var i = 1; i < pixels.length - 1; i++) {
         final middle = (pixels[i] + pixels[i + 1]) / 2;
 
