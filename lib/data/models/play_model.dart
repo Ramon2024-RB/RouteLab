@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'route_model.dart';
 import 'coverage_assignment.dart';
 
@@ -13,8 +14,15 @@ extension PlayCategoryLabel on PlayCategory {
 }
 
 class SavedPlay {
-  SavedPlay({required this.id, required this.name, required this.positions, List<PlayerRoute>? routes, List<CoverageAssignment>? coverages, this.category = PlayCategory.offense})
-      : routes = routes ?? [], coverages = coverages ?? [];
+  SavedPlay({
+    required this.id,
+    required this.name,
+    required this.positions,
+    List<PlayerRoute>? routes,
+    List<CoverageAssignment>? coverages,
+    this.category = PlayCategory.offense,
+  }) : routes = routes ?? [],
+       coverages = coverages ?? [];
 
   final String id;
   final String name;
@@ -45,16 +53,34 @@ class SavedPlay {
         : <Offset>[];
     return SavedPlay(
       id: json['id'] as String,
-      category: PlayCategory.values.firstWhere((v) => v.name == json['category'], orElse: () => PlayCategory.offense),
+      category: PlayCategory.values.firstWhere(
+        (v) => v.name == json['category'],
+        orElse: () => PlayCategory.offense,
+      ),
       name: json['name'] as String,
       positions: parsed.length == 22 ? parsed : defaultPlayerPositions(),
       coverages: ((json['coverages'] as List?) ?? [])
-          .map((e) => CoverageAssignment.fromJson(Map<String, dynamic>.from(e as Map)))
-          .where((c) => c.defenderIndex >= 11 && c.defenderIndex < 22 &&
-              (c.kind == 'zone' ? c.zone != null :
-                  c.kind == 'man' && c.receiverIndex != null && c.receiverIndex! >= 0 && c.receiverIndex! < 11))
+          .map(
+            (e) => CoverageAssignment.fromJson(
+              Map<String, dynamic>.from(e as Map),
+            ),
+          )
+          .where(
+            (c) =>
+                c.defenderIndex >= 11 &&
+                c.defenderIndex < 22 &&
+                (c.kind == 'zone'
+                    ? c.zone != null
+                    : c.kind == 'man' &&
+                          c.receiverIndex != null &&
+                          c.receiverIndex! >= 0 &&
+                          c.receiverIndex! < 11),
+          )
           .toList(),
-      routes: ((json['routes'] as List?) ?? []).map((e) => PlayerRoute.fromJson(Map<String, dynamic>.from(e as Map))).where((r) => r.playerIndex >= 0 && r.playerIndex < 22).toList(),
+      routes: ((json['routes'] as List?) ?? [])
+          .map((e) => PlayerRoute.fromJson(Map<String, dynamic>.from(e as Map)))
+          .where((r) => r.playerIndex >= 0 && r.playerIndex < 22)
+          .toList(),
     );
   }
 }

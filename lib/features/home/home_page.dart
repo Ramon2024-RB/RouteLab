@@ -139,103 +139,177 @@ class _RouteLabHomeState extends State<RouteLabHome> {
   Widget build(BuildContext context) {
     const green = Color(0xFF39F47B);
     final current = category;
-    final visible = current == null ? <SavedPlay>[] :
-        plays.where((p) => p.category == current).toList();
+    final visible = current == null
+        ? <SavedPlay>[]
+        : plays.where((p) => p.category == current).toList();
     return Scaffold(
       appBar: AppBar(
-        leading: current == null ? null : IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => setState(() => category = null),
+        leading: current == null
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => setState(() => category = null),
+              ),
+        title: Text(
+          current == null ? 'RouteLab' : '${current.label} Playbook',
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        title: Text(current == null ? 'RouteLab' : '${current.label} Playbook',
-          style: const TextStyle(fontWeight: FontWeight.bold)),
       ),
       body: SafeArea(
         child: current == null
-          ? ListView(padding: const EdgeInsets.all(20), children: [
-              const SizedBox(height: 18),
-              const Text('DESIGN. STUDY. EXECUTE.',
-                  style: TextStyle(color: green, letterSpacing: 1.5)),
-              const SizedBox(height: 12),
-              const Text('Dein Gameplan.\nDeine Playbooks.',
-                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 24),
-              for (final item in PlayCategory.values) ...[
-                Card(color: const Color(0xFF153024), clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () => setState(() => category = item),
-                    child: Padding(padding: const EdgeInsets.all(20), child: Row(children: [
-                      Icon(_icon(item), color: green, size: 32),
-                      const SizedBox(width: 18),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(item.label, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 6),
-                          Text(_description(item), style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                          const SizedBox(height: 9),
-                          Text('${plays.where((p) => p.category == item).length} Plays',
-                            style: const TextStyle(color: green)),
-                        ])),
-                      const Icon(Icons.chevron_right),
-                    ])),
-                  )),
-                const SizedBox(height: 12),
-              ],
-              if (loading) const Center(child: CircularProgressIndicator()),
-              const SizedBox(height: 12),
-              const Text('Bisherige Plays werden zunächst unter Offense angezeigt und können verschoben werden.',
-                  style: TextStyle(color: Colors.white54, fontSize: 12)),
-            ])
-          : Column(children: [
-              Padding(padding: const EdgeInsets.all(20), child: Row(children: [
-                Icon(_icon(current), color: green),
-                const SizedBox(width: 12),
-                Expanded(child: Text(_description(current),
-                  style: const TextStyle(color: Colors.white70))),
-              ])),
-              Expanded(child: loading
-                ? const Center(child: CircularProgressIndicator())
-                : visible.isEmpty
-                  ? const Center(child: Text('Noch keine Plays in diesem Playbook.'))
-                  : ListView.builder(
-                    itemCount: visible.length,
-                    itemBuilder: (context, index) {
-                      final play = visible[index];
-                      return Card(child: ListTile(
-                        leading: Icon(_icon(current), color: green),
-                        title: Text(play.name),
-                        onTap: () => openPlay(play),
-                        trailing: PopupMenuButton<String>(
-                          tooltip: 'Play verwalten',
-                          onSelected: (value) {
-                            if (value == 'delete') {
-                              final actualIndex = plays.indexWhere((p) => p.id == play.id);
-                              deletePlay(actualIndex);
-                            } else {
-                              movePlay(play, PlayCategory.values.firstWhere((v) => v.name == value));
-                            }
-                          },
-                          itemBuilder: (_) => [
-                            for (final target in PlayCategory.values)
-                              if (target != current)
-                                PopupMenuItem(value: target.name,
-                                  child: Text('Zu ${target.label} verschieben')),
-                            const PopupMenuDivider(),
-                            const PopupMenuItem(value: 'delete', child: Text('Löschen')),
-                          ],
+            ? ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  const SizedBox(height: 18),
+                  const Text(
+                    'DESIGN. STUDY. EXECUTE.',
+                    style: TextStyle(color: green, letterSpacing: 1.5),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Dein Gameplan.\nDeine Playbooks.',
+                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 24),
+                  for (final item in PlayCategory.values) ...[
+                    Card(
+                      color: const Color(0xFF153024),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => setState(() => category = item),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Row(
+                            children: [
+                              Icon(_icon(item), color: green, size: 32),
+                              const SizedBox(width: 18),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.label,
+                                      style: const TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _description(item),
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 9),
+                                    Text(
+                                      '${plays.where((p) => p.category == item).length} Plays',
+                                      style: const TextStyle(color: green),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right),
+                            ],
+                          ),
                         ),
-                      ));
-                    },
-                  )),
-              Padding(padding: const EdgeInsets.all(20), child: SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: createPlay,
-                  icon: const Icon(Icons.add),
-                  label: Text('Neues ${current.label} Play'),
-                ),
-              )),
-            ]),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (loading) const Center(child: CircularProgressIndicator()),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Bisherige Plays werden zunächst unter Offense angezeigt und können verschoben werden.',
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ],
+              )
+            : Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Icon(_icon(current), color: green),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _description(current),
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : visible.isEmpty
+                        ? const Center(
+                            child: Text('Noch keine Plays in diesem Playbook.'),
+                          )
+                        : ListView.builder(
+                            itemCount: visible.length,
+                            itemBuilder: (context, index) {
+                              final play = visible[index];
+                              return Card(
+                                child: ListTile(
+                                  leading: Icon(_icon(current), color: green),
+                                  title: Text(play.name),
+                                  onTap: () => openPlay(play),
+                                  trailing: PopupMenuButton<String>(
+                                    tooltip: 'Play verwalten',
+                                    onSelected: (value) {
+                                      if (value == 'delete') {
+                                        final actualIndex = plays.indexWhere(
+                                          (p) => p.id == play.id,
+                                        );
+                                        deletePlay(actualIndex);
+                                      } else {
+                                        movePlay(
+                                          play,
+                                          PlayCategory.values.firstWhere(
+                                            (v) => v.name == value,
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    itemBuilder: (_) => [
+                                      for (final target in PlayCategory.values)
+                                        if (target != current)
+                                          PopupMenuItem(
+                                            value: target.name,
+                                            child: Text(
+                                              'Zu ${target.label} verschieben',
+                                            ),
+                                          ),
+                                      const PopupMenuDivider(),
+                                      const PopupMenuItem(
+                                        value: 'delete',
+                                        child: Text('Löschen'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: createPlay,
+                        icon: const Icon(Icons.add),
+                        label: Text('Neues ${current.label} Play'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }

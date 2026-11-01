@@ -3,8 +3,13 @@ import 'package:flutter/material.dart';
 /// Coverage is a responsibility, not a movement route.
 /// All coordinates are normalized to the field (0..1).
 class CoverageAssignment {
-  const CoverageAssignment({required this.defenderIndex, required this.kind,
-    this.receiverIndex, this.zoneName, this.zone});
+  const CoverageAssignment({
+    required this.defenderIndex,
+    required this.kind,
+    this.receiverIndex,
+    this.zoneName,
+    this.zone,
+  });
 
   final int defenderIndex; // 11..21
   final String kind; // man | zone
@@ -13,12 +18,17 @@ class CoverageAssignment {
   final Rect? zone;
 
   Map<String, dynamic> toJson() => {
-    'defenderIndex': defenderIndex, 'kind': kind,
-    'receiverIndex': receiverIndex, 'zoneName': zoneName,
-    if (zone != null) 'zone': {
-      'left': zone!.left, 'top': zone!.top,
-      'right': zone!.right, 'bottom': zone!.bottom,
-    },
+    'defenderIndex': defenderIndex,
+    'kind': kind,
+    'receiverIndex': receiverIndex,
+    'zoneName': zoneName,
+    if (zone != null)
+      'zone': {
+        'left': zone!.left,
+        'top': zone!.top,
+        'right': zone!.right,
+        'bottom': zone!.bottom,
+      },
   };
 
   factory CoverageAssignment.fromJson(Map<String, dynamic> json) {
@@ -27,15 +37,18 @@ class CoverageAssignment {
     if (raw is Map) {
       final z = Map<String, dynamic>.from(raw);
       rect = Rect.fromLTRB(
-        (z['left'] as num).toDouble(), (z['top'] as num).toDouble(),
-        (z['right'] as num).toDouble(), (z['bottom'] as num).toDouble(),
+        (z['left'] as num).toDouble(),
+        (z['top'] as num).toDouble(),
+        (z['right'] as num).toDouble(),
+        (z['bottom'] as num).toDouble(),
       );
     }
     return CoverageAssignment(
       defenderIndex: (json['defenderIndex'] as num).toInt(),
       kind: json['kind'] as String,
       receiverIndex: (json['receiverIndex'] as num?)?.toInt(),
-      zoneName: json['zoneName'] as String?, zone: rect,
+      zoneName: json['zoneName'] as String?,
+      zone: rect,
     );
   }
 }
@@ -53,8 +66,14 @@ const coverageZonePresets = <CoverageZonePreset>[
   CoverageZonePreset('Deep Left Half', Rect.fromLTRB(.02, .02, .50, .27)),
   CoverageZonePreset('Deep Right Half', Rect.fromLTRB(.50, .02, .98, .27)),
   CoverageZonePreset('Deep Left Quarter', Rect.fromLTRB(.02, .02, .26, .27)),
-  CoverageZonePreset('Deep Left-Middle Quarter', Rect.fromLTRB(.26, .02, .50, .27)),
-  CoverageZonePreset('Deep Right-Middle Quarter', Rect.fromLTRB(.50, .02, .74, .27)),
+  CoverageZonePreset(
+    'Deep Left-Middle Quarter',
+    Rect.fromLTRB(.26, .02, .50, .27),
+  ),
+  CoverageZonePreset(
+    'Deep Right-Middle Quarter',
+    Rect.fromLTRB(.50, .02, .74, .27),
+  ),
   CoverageZonePreset('Deep Right Quarter', Rect.fromLTRB(.74, .02, .98, .27)),
   CoverageZonePreset('Left Flat', Rect.fromLTRB(.02, .30, .25, .54)),
   CoverageZonePreset('Right Flat', Rect.fromLTRB(.75, .30, .98, .54)),
