@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../data/models/play_model.dart';
 import '../../data/models/route_model.dart';
 import '../../data/models/coverage_assignment.dart';
@@ -8,6 +9,8 @@ import 'formations/offense_formations.dart';
 import 'formations/defense_formations.dart';
 import 'painters/football_field_painter.dart';
 import 'player_actions.dart';
+import 'run_play_designer.dart';
+import 'blocking_designer.dart';
 
 class PlayEditor extends StatefulWidget {
   const PlayEditor({
@@ -44,7 +47,8 @@ class _PlayEditorState extends State<PlayEditor> {
   bool get _isOffense => widget.category == PlayCategory.offense;
   bool get _isDefense => widget.category == PlayCategory.defense;
   bool get _isSpecial => widget.category == PlayCategory.specialTeams;
-  bool _canSelect(int index) => showDefense || (_isDefense ? index >= 11 : index < 11);
+  bool _canSelect(int index) =>
+      showDefense || (_isDefense ? index >= 11 : index < 11);
 
   bool routeMode = false;
   bool freehand = true;
@@ -67,7 +71,11 @@ class _PlayEditorState extends State<PlayEditor> {
   void initState() {
     super.initState();
     positions = List<Offset>.from(widget.initialPositions);
-    viewFilter = _isDefense ? 'defense' : _isOffense ? 'offense' : 'all';
+    viewFilter = _isDefense
+        ? 'defense'
+        : _isOffense
+        ? 'offense'
+        : 'all';
     drawingAction = _isDefense ? 'blitz' : 'route';
     routes = List<PlayerRoute>.from(widget.initialRoutes);
     coverages = List<CoverageAssignment>.from(widget.initialCoverages);
@@ -88,7 +96,8 @@ class _PlayEditorState extends State<PlayEditor> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(value)));
   }
 
-  void _saveCoverages() => widget.onCoveragesChanged(List<CoverageAssignment>.from(coverages));
+  void _saveCoverages() =>
+      widget.onCoveragesChanged(List<CoverageAssignment>.from(coverages));
 
   void _saveRoutes() => widget.onRoutesChanged(List<PlayerRoute>.from(routes));
 
@@ -117,8 +126,11 @@ class _PlayEditorState extends State<PlayEditor> {
     if (selected == null || !freehand || draft.isEmpty) return;
     final point = _relative(pixel, size, selected!);
     final last = draft.last;
-    if ((Offset((point.dx-last.dx)*size.width,
-        (point.dy-last.dy)*size.height)).distance < 4) {
+    if ((Offset(
+          (point.dx - last.dx) * size.width,
+          (point.dy - last.dy) * size.height,
+        )).distance <
+        4) {
       return;
     }
     setState(() => draft.add(point));
@@ -127,8 +139,17 @@ class _PlayEditorState extends State<PlayEditor> {
   void _finishDraw() {
     if (selected == null || draft.length < 2) return;
     setState(() {
-      routes.removeWhere((r) => r.playerIndex == selected && r.action == drawingAction);
-      routes.add(PlayerRoute(playerIndex: selected!, points: List.of(draft), smooth: freehand, action: drawingAction));
+      routes.removeWhere(
+        (r) => r.playerIndex == selected && r.action == drawingAction,
+      );
+      routes.add(
+        PlayerRoute(
+          playerIndex: selected!,
+          points: List.of(draft),
+          smooth: freehand,
+          action: drawingAction,
+        ),
+      );
       draft.clear();
     });
     _saveRoutes();
@@ -151,8 +172,9 @@ class _PlayEditorState extends State<PlayEditor> {
     // the exact direction in which they were originally drawn.
     final isStandard = standardRoutes.contains(template);
     final mirror = isStandard && positions[selected!].dx < .5;
-    final mirrored = template.points.map((point) =>
-        Offset(mirror ? -point.dx : point.dx, point.dy)).toList();
+    final mirrored = template.points
+        .map((point) => Offset(mirror ? -point.dx : point.dx, point.dy))
+        .toList();
     // Keep routes on the field, especially outward-breaking routes from
     // receivers positioned near a sideline. Scale X only, not Y: a Wheel
     // must still turn UPFIELD after the initial Flat release.
@@ -162,18 +184,30 @@ class _PlayEditorState extends State<PlayEditor> {
     var xScale = 1.0;
     if (maxRight > 0) {
       xScale = (xScale < (.96 - originX) / maxRight)
-        ? xScale : (.96 - originX) / maxRight;
+          ? xScale
+          : (.96 - originX) / maxRight;
     }
     if (maxLeft > 0) {
       xScale = (xScale < (originX - .04) / maxLeft)
-        ? xScale : (originX - .04) / maxLeft;
+          ? xScale
+          : (originX - .04) / maxLeft;
     }
     xScale = xScale.clamp(.15, 1.0);
-    final appliedPoints = mirrored.map((p) => Offset(p.dx * xScale, p.dy)).toList();
+    final appliedPoints = mirrored
+        .map((p) => Offset(p.dx * xScale, p.dy))
+        .toList();
     setState(() {
-      routes.removeWhere((r) => r.playerIndex == selected && r.action == 'route');
-      routes.add(PlayerRoute(playerIndex: selected!, points: appliedPoints,
-          name: template.name, smooth: template.smooth));
+      routes.removeWhere(
+        (r) => r.playerIndex == selected && r.action == 'route',
+      );
+      routes.add(
+        PlayerRoute(
+          playerIndex: selected!,
+          points: appliedPoints,
+          name: template.name,
+          smooth: template.smooth,
+        ),
+      );
       draft.clear();
     });
     _saveRoutes();
@@ -185,11 +219,24 @@ class _PlayEditorState extends State<PlayEditor> {
       return;
     }
     final player = selected!;
-    if (player >= 11) { await _showCoverageActions(player); return; }
-    final presets = actionsForPlayer(player, isFullback: formation == OffenseFormation.iFormation);
-    final role = player == 5 ? 'Quarterback' : player <= 4 ? 'Offensive Line'
-        : player == 6 || (player == 10 && formation == OffenseFormation.iFormation)
-            ? 'Running Back / Fullback' : player == 9 ? 'Tight End' : 'Receiver';
+    if (player >= 11) {
+      await _showCoverageActions(player);
+      return;
+    }
+    final presets = actionsForPlayer(
+      player,
+      isFullback: formation == OffenseFormation.iFormation,
+    );
+    final role = player == 5
+        ? 'Quarterback'
+        : player <= 4
+        ? 'Offensive Line'
+        : player == 6 ||
+              (player == 10 && formation == OffenseFormation.iFormation)
+        ? 'Running Back / Fullback'
+        : player == 9
+        ? 'Tight End'
+        : 'Receiver';
     String categoryOf(PlayerActionPreset preset) => switch (preset.kind) {
       'route' => 'Passroute',
       'run' => 'Laufweg',
@@ -198,10 +245,19 @@ class _PlayEditorState extends State<PlayEditor> {
       _ => 'Bewegung',
     };
     final groups = <String>[
-      for (final kind in ['Passroute', 'Laufweg', 'Blocking', 'Ballaktion', 'Bewegung'])
+      for (final kind in [
+        'Passroute',
+        'Laufweg',
+        'Blocking',
+        'Ballaktion',
+        'Bewegung',
+      ])
         if (presets.any((p) => categoryOf(p) == kind)) kind,
     ];
-    var group = groups.first;
+    final isRunner =
+        player == 6 ||
+        (player == 10 && formation == OffenseFormation.iFormation);
+    var group = isRunner ? 'Laufweg' : groups.first;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -215,96 +271,222 @@ class _PlayEditorState extends State<PlayEditor> {
           final visible = presets.where((p) => categoryOf(p) == group).toList();
           return FractionallySizedBox(
             heightFactor: .72,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 12, 10),
-                child: Row(children: [
-                  const Icon(Icons.person_outline, color: Color(0xFF7BDCC0)),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(offenseLabelAt(player, formation),
-                      style: Theme.of(ctx).textTheme.titleLarge),
-                    Text(role, style: const TextStyle(color: Colors.white60)),
-                  ])),
-                  IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
-                ]),
-              ),
-              SizedBox(
-                height: 48,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: [for (final item in groups)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(item),
-                        selected: group == item,
-                        onSelected: (_) => updateSheet(() => group = item),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 12, 10),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.person_outline,
+                        color: Color(0xFF7BDCC0),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 16),
-              Expanded(child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
-                itemCount: visible.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 4),
-                itemBuilder: (ctx, index) {
-                  final preset = visible[index];
-                  return Card(
-                    color: const Color(0xFF1B3428),
-                    child: ListTile(
-                      leading: Icon(
-                        group == 'Blocking' ? Icons.shield_outlined
-                          : group == 'Laufweg' ? Icons.directions_run
-                          : group == 'Ballaktion' ? Icons.sports_football
-                          : Icons.alt_route,
-                        color: const Color(0xFF7BDCC0),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              offenseLabelAt(player, formation),
+                              style: Theme.of(ctx).textTheme.titleLarge,
+                            ),
+                            Text(
+                              role,
+                              style: const TextStyle(color: Colors.white60),
+                            ),
+                          ],
+                        ),
                       ),
-                      title: Text(preset.label),
-                      trailing: const Icon(Icons.add_circle_outline),
-                      onTap: () {
-                        final mirror = preset.mirror && positions[player].dx < .5;
-                        final points = preset.points.map((p) => Offset(mirror ? -p.dx : p.dx, p.dy)).toList();
-                        final origin = positions[player];
-                        final maxX = points.fold<double>(0, (m, p) => p.dx > m ? p.dx : m);
-                        final minX = points.fold<double>(0, (m, p) => -p.dx > m ? -p.dx : m);
-                        var scale = 1.0;
-                        if (maxX > 0) scale = scale.clamp(0.0, (.97 - origin.dx) / maxX).toDouble();
-                        if (minX > 0) scale = scale.clamp(0.0, (origin.dx - .03) / minX).toDouble();
-                        setState(() {
-                          routes.removeWhere((r) => r.playerIndex == player && r.action == preset.kind);
-                          routes.add(PlayerRoute(
-                            playerIndex: player,
-                            name: preset.label,
-                            action: preset.kind,
-                            points: points.map((p) => Offset(p.dx * scale, p.dy)).toList(),
-                          ));
-                          draft.clear();
-                        });
-                        _saveRoutes();
-                        Navigator.pop(ctx);
-                      },
-                    ),
-                  );
-                },
-              )),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
-                child: SizedBox(width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      setState(() { toolsExpanded = true; routeMode = true; draft.clear(); });
-                    },
-                    icon: const Icon(Icons.draw_outlined),
-                    label: const Text('Eigene Bewegung zeichnen'),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ]),
+                SizedBox(
+                  height: 48,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    children: [
+                      for (final item in groups)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(item),
+                            selected: group == item,
+                            onSelected: (_) => updateSheet(() => group = item),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 16),
+                Expanded(
+                  child: isRunner && group == 'Laufweg'
+                      ? RunPlayDesigner(
+                          positions: positions,
+                          playerIndex: player,
+                          onApply: (result) {
+                            setState(() {
+                              routes.removeWhere(
+                                (r) =>
+                                    r.playerIndex == player &&
+                                    r.action == 'run',
+                              );
+                              routes.add(
+                                PlayerRoute(
+                                  playerIndex: player,
+                                  name: result.label,
+                                  action: 'run',
+                                  points: result.points,
+                                ),
+                              );
+                              // Vorherige automatisch erzeugte Blocks entfernen.
+                              routes.removeWhere(
+                                (route) =>
+                                    route.playerIndex >= 0 &&
+                                    route.playerIndex < 5 &&
+                                    route.action == 'block' &&
+                                    route.name.startsWith('Auto Block · '),
+                              );
+
+                              if (result.withBlocking) {
+                                final assignments = BlockingDesigner.generate(
+                                  positions: positions,
+                                  concept: result.concept,
+                                  direction: result.direction,
+                                  gap: result.gap,
+                                );
+
+                                for (final assignment in assignments) {
+                                  final hasManualBlock = routes.any(
+                                    (route) =>
+                                        route.playerIndex ==
+                                            assignment.playerIndex &&
+                                        route.action == 'block',
+                                  );
+
+                                  if (hasManualBlock) continue;
+
+                                  routes.add(
+                                    PlayerRoute(
+                                      playerIndex: assignment.playerIndex,
+                                      action: 'block',
+                                      name: 'Auto Block · ${assignment.name}',
+                                      points: assignment.points,
+                                    ),
+                                  );
+                                }
+                              }
+
+                              draft.clear();
+                            });
+                            _saveRoutes();
+                            Navigator.pop(ctx);
+                          },
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
+                          itemCount: visible.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 4),
+                          itemBuilder: (ctx, index) {
+                            final preset = visible[index];
+                            return Card(
+                              color: const Color(0xFF1B3428),
+                              child: ListTile(
+                                leading: Icon(
+                                  group == 'Blocking'
+                                      ? Icons.shield_outlined
+                                      : group == 'Laufweg'
+                                      ? Icons.directions_run
+                                      : group == 'Ballaktion'
+                                      ? Icons.sports_football
+                                      : Icons.alt_route,
+                                  color: const Color(0xFF7BDCC0),
+                                ),
+                                title: Text(preset.label),
+                                trailing: const Icon(Icons.add_circle_outline),
+                                onTap: () {
+                                  final mirror =
+                                      preset.mirror &&
+                                      positions[player].dx < .5;
+                                  final points = preset.points
+                                      .map(
+                                        (p) =>
+                                            Offset(mirror ? -p.dx : p.dx, p.dy),
+                                      )
+                                      .toList();
+                                  final origin = positions[player];
+                                  final maxX = points.fold<double>(
+                                    0,
+                                    (m, p) => p.dx > m ? p.dx : m,
+                                  );
+                                  final minX = points.fold<double>(
+                                    0,
+                                    (m, p) => -p.dx > m ? -p.dx : m,
+                                  );
+                                  var scale = 1.0;
+                                  if (maxX > 0) {
+                                    scale = scale
+                                        .clamp(0.0, (.97 - origin.dx) / maxX)
+                                        .toDouble();
+                                  }
+                                  if (minX > 0) {
+                                    scale = scale
+                                        .clamp(0.0, (origin.dx - .03) / minX)
+                                        .toDouble();
+                                  }
+                                  setState(() {
+                                    routes.removeWhere(
+                                      (r) =>
+                                          r.playerIndex == player &&
+                                          r.action == preset.kind,
+                                    );
+                                    routes.add(
+                                      PlayerRoute(
+                                        playerIndex: player,
+                                        name: preset.label,
+                                        action: preset.kind,
+                                        points: points
+                                            .map(
+                                              (p) => Offset(p.dx * scale, p.dy),
+                                            )
+                                            .toList(),
+                                      ),
+                                    );
+                                    draft.clear();
+                                  });
+                                  _saveRoutes();
+                                  Navigator.pop(ctx);
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        setState(() {
+                          toolsExpanded = true;
+                          routeMode = true;
+                          draft.clear();
+                        });
+                      },
+                      icon: const Icon(Icons.draw_outlined),
+                      label: const Text('Eigene Bewegung zeichnen'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),
@@ -320,56 +502,88 @@ class _PlayEditorState extends State<PlayEditor> {
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          child: Column(mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('$position · Assignment',
-              style: Theme.of(ctx).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            const Text('Wähle die Aufgabe dieses Verteidigers.',
-              style: TextStyle(color: Colors.white60)),
-            const SizedBox(height: 18),
-            Row(children: [
-              Expanded(child: _assignmentChoice(
-                icon: Icons.layers_outlined, label: 'Zone',
-                description: 'Bereich auf dem Feld',
-                onTap: () { Navigator.pop(ctx); _chooseCoverageZone(player); },
-              )),
-              const SizedBox(width: 10),
-              Expanded(child: _assignmentChoice(
-                icon: Icons.person_search, label: 'Man',
-                description: 'Gegenspieler zuweisen',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$position · Assignment',
+                style: Theme.of(ctx).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Wähle die Aufgabe dieses Verteidigers.',
+                style: TextStyle(color: Colors.white60),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: _assignmentChoice(
+                      icon: Icons.layers_outlined,
+                      label: 'Zone',
+                      description: 'Bereich auf dem Feld',
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _chooseCoverageZone(player);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _assignmentChoice(
+                      icon: Icons.person_search,
+                      label: 'Man',
+                      description: 'Gegenspieler zuweisen',
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        setState(() {
+                          targetMode = 'man';
+                          routeMode = false;
+                          toolsExpanded = false;
+                          showDefense =
+                              true; // Show the offense to choose a target.
+                        });
+                        _message(
+                          'Offense eingeblendet: Gegenspieler antippen.',
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _assignmentChoice(
+                icon: Icons.directions_run,
+                label: 'Blitz / Run Fit',
+                description: 'Bewegung oder Angriffspfad festlegen',
                 onTap: () {
                   Navigator.pop(ctx);
-                  setState(() {
-                    targetMode = 'man';
-                    routeMode = false;
-                    toolsExpanded = false;
-                    showDefense = true; // Show the offense to choose a target.
-                  });
-                  _message('Offense eingeblendet: Gegenspieler antippen.');
-                },
-              )),
-            ]),
-            const SizedBox(height: 10),
-            _assignmentChoice(
-              icon: Icons.directions_run, label: 'Blitz / Run Fit',
-              description: 'Bewegung oder Angriffspfad festlegen',
-              onTap: () { Navigator.pop(ctx); _showDefenseMovementActions(player); },
-            ),
-            if (coverages.any((c) => c.defenderIndex == player)) ...[
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                title: const Text('Coverage-Aufgabe entfernen'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  setState(() => coverages.removeWhere((c) => c.defenderIndex == player));
-                  _saveCoverages();
+                  _showDefenseMovementActions(player);
                 },
               ),
+              if (coverages.any((c) => c.defenderIndex == player)) ...[
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(
+                    Icons.delete_outline,
+                    color: Colors.redAccent,
+                  ),
+                  title: const Text('Coverage-Aufgabe entfernen'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(
+                      () => coverages.removeWhere(
+                        (c) => c.defenderIndex == player,
+                      ),
+                    );
+                    _saveCoverages();
+                  },
+                ),
+              ],
             ],
-          ]),
+          ),
         ),
       ),
     );
@@ -389,36 +603,71 @@ class _PlayEditorState extends State<PlayEditor> {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(14),
-          child: Row(children: [
-            Icon(icon, color: const Color(0xFF7BDCC0)),
-            const SizedBox(width: 10),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(description, style: const TextStyle(
-                  fontSize: 11, color: Colors.white60)),
-              ],
-            )),
-          ]),
+          child: Row(
+            children: [
+              Icon(icon, color: const Color(0xFF7BDCC0)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.white60,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Future<void> _showDefenseMovementActions(int player) async {
-    final presets = actionsForPlayer(player).where((a) => a.kind != 'coverage').toList();
-    await showModalBottomSheet<void>(context: context, builder: (ctx) =>
-      SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: presets.map((preset) =>
-        ListTile(title: Text(preset.label), onTap: () {
-          setState(() {
-            routes.removeWhere((r) => r.playerIndex == player && r.action == preset.kind);
-            routes.add(PlayerRoute(playerIndex: player, action: preset.kind,
-              name: preset.label, points: preset.points));
-          });
-          _saveRoutes(); Navigator.pop(ctx);
-        }),
-      ).toList())),
+    final presets = actionsForPlayer(player)
+        .where((a) => a.kind != 'coverage')
+        .toList();
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: presets
+              .map(
+                (preset) => ListTile(
+                  title: Text(preset.label),
+                  onTap: () {
+                    setState(() {
+                      routes.removeWhere(
+                        (r) =>
+                            r.playerIndex == player && r.action == preset.kind,
+                      );
+                      routes.add(
+                        PlayerRoute(
+                          playerIndex: player,
+                          action: preset.kind,
+                          name: preset.label,
+                          points: preset.points,
+                        ),
+                      );
+                    });
+                    _saveRoutes();
+                    Navigator.pop(ctx);
+                  },
+                ),
+              )
+              .toList(),
+        ),
+      ),
     );
   }
 
@@ -436,19 +685,33 @@ class _PlayEditorState extends State<PlayEditor> {
   List<CoverageZonePreset> get _visibleZonePresets {
     switch (zoneSelectionGroup) {
       case 'Deep Half':
-        return coverageZonePresets.where((z) => z.name.contains('Half')).toList();
+        return coverageZonePresets
+            .where((z) => z.name.contains('Half'))
+            .toList();
       case 'Deep Quarter':
-        return coverageZonePresets.where((z) => z.name.contains('Quarter')).toList();
+        return coverageZonePresets
+            .where((z) => z.name.contains('Quarter'))
+            .toList();
       case 'Flat':
-        return coverageZonePresets.where((z) => z.name == 'Left Flat' || z.name == 'Right Flat').toList();
+        return coverageZonePresets
+            .where((z) => z.name == 'Left Flat' || z.name == 'Right Flat')
+            .toList();
       case 'Curl/Flat':
-        return coverageZonePresets.where((z) => z.name.contains('Curl/Flat')).toList();
+        return coverageZonePresets
+            .where((z) => z.name.contains('Curl/Flat'))
+            .toList();
       case 'Hook/Curl':
-        return coverageZonePresets.where((z) => z.name.contains('Hook/Curl')).toList();
+        return coverageZonePresets
+            .where((z) => z.name.contains('Hook/Curl'))
+            .toList();
       case 'Middle':
-        return coverageZonePresets.where((z) => z.name == 'Middle Hook' || z.name == 'Middle Hole').toList();
+        return coverageZonePresets
+            .where((z) => z.name == 'Middle Hook' || z.name == 'Middle Hole')
+            .toList();
       default:
-        return coverageZonePresets.where((z) => z.name.contains('Third')).toList();
+        return coverageZonePresets
+            .where((z) => z.name.contains('Third'))
+            .toList();
     }
   }
 
@@ -480,12 +743,14 @@ class _PlayEditorState extends State<PlayEditor> {
     if (player == null) return;
     setState(() {
       coverages.removeWhere((c) => c.defenderIndex == player);
-      coverages.add(CoverageAssignment(
-        defenderIndex: player,
-        kind: 'zone',
-        zoneName: preset.name,
-        zone: preset.rect,
-      ));
+      coverages.add(
+        CoverageAssignment(
+          defenderIndex: player,
+          kind: 'zone',
+          zoneName: preset.name,
+          zone: preset.rect,
+        ),
+      );
       zoneSelectionPlayer = null;
       showAllCoverage = true;
     });
@@ -497,68 +762,109 @@ class _PlayEditorState extends State<PlayEditor> {
     final player = zoneSelectionPlayer;
     if (player == null) return const SizedBox.shrink();
     final presets = _visibleZonePresets;
-    return Stack(children: [
-      ...presets.map((preset) {
-        final r = preset.rect;
-        return Positioned(
-          left: r.left * fieldSize.width,
-          top: r.top * fieldSize.height,
-          width: r.width * fieldSize.width,
-          height: r.height * fieldSize.height,
-          child: Material(
-            color: Colors.lightBlueAccent.withValues(alpha: .25),
-            shape: RoundedRectangleBorder(
-              side: const BorderSide(color: Colors.lightBlueAccent, width: 1.6),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: InkWell(
-              onTap: () => _assignCoverageZone(preset),
-              child: Center(child: Padding(
-                padding: const EdgeInsets.all(3),
-                child: Text(_shortZoneName(preset.name),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white,
-                    fontSize: 11, fontWeight: FontWeight.bold,
-                    shadows: [Shadow(color: Colors.black, blurRadius: 5)])),
-              )),
-            ),
-          ),
-        );
-      }),
-      Positioned(left: 6, right: 6, bottom: 8,
-        child: Material(
-          color: const Color(0xEE102219),
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text('Zone für ${defenseLabelsFor(defenseFormation)[player - 11]} antippen',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              SingleChildScrollView(scrollDirection: Axis.horizontal,
-                child: Row(children: [
-                  for (final group in const ['Deep Third', 'Deep Half', 'Deep Quarter', 'Flat', 'Curl/Flat', 'Hook/Curl', 'Middle'])
-                    Padding(padding: const EdgeInsets.only(right: 5),
-                      child: ChoiceChip(
-                        label: Text(group, style: const TextStyle(fontSize: 10)),
-                        visualDensity: VisualDensity.compact,
-                        selected: zoneSelectionGroup == group,
-                        onSelected: (_) => setState(() => zoneSelectionGroup = group),
-                      )),
-                  IconButton(
-                    tooltip: 'Abbrechen',
-                    onPressed: () => setState(() => zoneSelectionPlayer = null),
-                    icon: const Icon(Icons.close, size: 19),
-                  ),
-                ]),
+    return Stack(
+      children: [
+        ...presets.map((preset) {
+          final r = preset.rect;
+          return Positioned(
+            left: r.left * fieldSize.width,
+            top: r.top * fieldSize.height,
+            width: r.width * fieldSize.width,
+            height: r.height * fieldSize.height,
+            child: Material(
+              color: Colors.lightBlueAccent.withValues(alpha: .25),
+              shape: RoundedRectangleBorder(
+                side: const BorderSide(
+                  color: Colors.lightBlueAccent,
+                  width: 1.6,
+                ),
+                borderRadius: BorderRadius.circular(6),
               ),
-            ]),
+              child: InkWell(
+                onTap: () => _assignCoverageZone(preset),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(3),
+                    child: Text(
+                      _shortZoneName(preset.name),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        shadows: [Shadow(color: Colors.black, blurRadius: 5)],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+        Positioned(
+          left: 6,
+          right: 6,
+          bottom: 8,
+          child: Material(
+            color: const Color(0xEE102219),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Zone für ${defenseLabelsFor(defenseFormation)[player - 11]} antippen',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final group in const [
+                          'Deep Third',
+                          'Deep Half',
+                          'Deep Quarter',
+                          'Flat',
+                          'Curl/Flat',
+                          'Hook/Curl',
+                          'Middle',
+                        ])
+                          Padding(
+                            padding: const EdgeInsets.only(right: 5),
+                            child: ChoiceChip(
+                              label: Text(
+                                group,
+                                style: const TextStyle(fontSize: 10),
+                              ),
+                              visualDensity: VisualDensity.compact,
+                              selected: zoneSelectionGroup == group,
+                              onSelected: (_) =>
+                                  setState(() => zoneSelectionGroup = group),
+                            ),
+                          ),
+                        IconButton(
+                          tooltip: 'Abbrechen',
+                          onPressed: () =>
+                              setState(() => zoneSelectionPlayer = null),
+                          icon: const Icon(Icons.close, size: 19),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-      ),
-    ]);
+      ],
+    );
   }
 
   void _startTargetAssignment(String kind) {
@@ -580,9 +886,9 @@ class _PlayEditorState extends State<PlayEditor> {
       routeMode = false;
       draft.clear();
     });
-    _message(kind == 'block'
-        ? 'Tippe auf den Verteidiger, der geblockt werden soll.'
-        : 'Tippe auf den RB oder einen anderen Offense-Spieler als Ballempfänger.');
+    _message(
+      kind == 'block' ? 'Tippe auf den Verteidiger, der geblockt werden soll.' : 'Tippe auf den RB oder einen anderen Offense-Spieler als Ballempfänger.',
+    );
   }
 
   void _assignTarget(int? target) {
@@ -595,14 +901,23 @@ class _PlayEditorState extends State<PlayEditor> {
     }
     if (kind == 'man') {
       if (source < 11 || target >= 11) {
-        _message('Für Man Coverage einen Offense-Spieler auswählen.'); return;
+        _message('Für Man Coverage einen Offense-Spieler auswählen.');
+        return;
       }
       setState(() {
         coverages.removeWhere((c) => c.defenderIndex == source);
-        coverages.add(CoverageAssignment(defenderIndex: source, kind: 'man', receiverIndex: target));
-        targetMode = null; showAllCoverage = true;
+        coverages.add(
+          CoverageAssignment(
+            defenderIndex: source,
+            kind: 'man',
+            receiverIndex: target,
+          ),
+        );
+        targetMode = null;
+        showAllCoverage = true;
       });
-      _saveCoverages(); return;
+      _saveCoverages();
+      return;
     }
     if (kind == 'block' && target < 11) {
       _message('Ein Blockziel muss ein Defense-Spieler sein.');
@@ -616,13 +931,15 @@ class _PlayEditorState extends State<PlayEditor> {
     final destination = positions[target];
     setState(() {
       routes.removeWhere((r) => r.playerIndex == source && r.action == kind);
-      routes.add(PlayerRoute(
-        playerIndex: source,
-        action: kind,
-        targetIndex: target,
-        name: kind == 'block' ? 'Blockziel' : 'Handoff',
-        points: [Offset.zero, destination - origin],
-      ));
+      routes.add(
+        PlayerRoute(
+          playerIndex: source,
+          action: kind,
+          targetIndex: target,
+          name: kind == 'block' ? 'Blockziel' : 'Handoff',
+          points: [Offset.zero, destination - origin],
+        ),
+      );
       targetMode = null;
     });
     _saveRoutes();
@@ -633,7 +950,10 @@ class _PlayEditorState extends State<PlayEditor> {
     var distanceLimit = 28.0;
     for (var i = 0; i < positions.length; i++) {
       if (!_canSelect(i)) continue;
-      final pixel = Offset(positions[i].dx * size.width, positions[i].dy * size.height);
+      final pixel = Offset(
+        positions[i].dx * size.width,
+        positions[i].dy * size.height,
+      );
       final distance = (pixel - point).distance;
       if (distance < distanceLimit) {
         distanceLimit = distance;
@@ -654,41 +974,86 @@ class _PlayEditorState extends State<PlayEditor> {
   Future<void> _saveTemplate() async {
     if (selected == null) return;
     final existing = routes.where((r) => r.playerIndex == selected).toList();
-    final points = draft.length >= 2 ? List<Offset>.from(draft)
-        : existing.isNotEmpty ? List<Offset>.from(existing.last.points) : <Offset>[];
+    final points = draft.length >= 2
+        ? List<Offset>.from(draft)
+        : existing.isNotEmpty
+        ? List<Offset>.from(existing.last.points)
+        : <Offset>[];
     if (points.length < 2) {
       _message('Zeichne zuerst eine Route.');
       return;
     }
     final controller = TextEditingController();
-    final name = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('Route als Vorlage speichern'),
-      content: TextField(controller: controller, autofocus: true,
-          decoration: const InputDecoration(labelText: 'Routenname')),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Abbrechen')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Speichern'))],
-    ));
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Route als Vorlage speichern'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Routenname'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Speichern'),
+          ),
+        ],
+      ),
+    );
     controller.dispose();
     if (!mounted || name == null || name.isEmpty) return;
-    setState(() => templates.add(RouteTemplate(name: name, points: points, smooth: freehand)));
+    setState(
+      () => templates.add(
+        RouteTemplate(name: name, points: points, smooth: freehand),
+      ),
+    );
     try {
       await routeStorage.save(templates);
       _message('„$name“ wurde in Meine Routen gespeichert.');
-    } catch (e) { _message('Vorlage konnte nicht gespeichert werden: $e'); }
+    } catch (e) {
+      _message('Vorlage konnte nicht gespeichert werden: $e');
+    }
   }
 
   Future<void> _showRouteLibrary() async {
-    if (selected == null) { _message('Wähle zuerst einen Spieler aus.'); return; }
-    await showModalBottomSheet<void>(context: context, isScrollControlled: true,
-      builder: (ctx) => SafeArea(child: SizedBox(height: MediaQuery.sizeOf(ctx).height * .65,
-        child: DefaultTabController(length: 2, child: Column(children: [
-          const TabBar(tabs: [Tab(text: 'Standardrouten'), Tab(text: 'Meine Routen')]),
-          Expanded(child: TabBarView(children: [
-            _routeList(ctx, _routesForSelected()), _routeList(ctx, templates),
-          ])),
-        ])),
-      )),
+    if (selected == null) {
+      _message('Wähle zuerst einen Spieler aus.');
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(ctx).height * .65,
+          child: DefaultTabController(
+            length: 2,
+            child: Column(
+              children: [
+                const TabBar(
+                  tabs: [
+                    Tab(text: 'Standardrouten'),
+                    Tab(text: 'Meine Routen'),
+                  ],
+                ),
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      _routeList(ctx, _routesForSelected()),
+                      _routeList(ctx, templates),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -697,30 +1062,51 @@ class _PlayEditorState extends State<PlayEditor> {
     final i = selected!;
     if (i >= 11 || i <= 4 || i == 5) return [];
     if (i == 6 || (formation == OffenseFormation.iFormation && i == 10)) {
-      const names = {'Flat', 'Wheel', 'Drag', 'Slant', 'Angle / Texas', 'Swing', 'Checkdown', 'Screen'};
+      const names = {
+        'Flat',
+        'Wheel',
+        'Drag',
+        'Slant',
+        'Angle / Texas',
+        'Swing',
+        'Checkdown',
+        'Screen',
+      };
       return standardRoutes.where((r) => names.contains(r.name)).toList();
     }
     return standardRoutes;
   }
 
   Widget _routeList(BuildContext sheetContext, List<RouteTemplate> entries) {
-    if (entries.isEmpty) return const Center(child: Text('Noch keine eigenen Routen gespeichert.'));
-    return ListView.builder(itemCount: entries.length, itemBuilder: (ctx, index) {
-      final route = entries[index];
-      return ListTile(
-        leading: const Icon(Icons.alt_route, color: Color(0xFF39F47B)),
-        title: Text(route.name),
-        subtitle: Text('${route.points.length} Punkte'),
-        trailing: const Icon(Icons.add_circle_outline),
-        onTap: () { _applyRoute(route); Navigator.pop(sheetContext); },
+    if (entries.isEmpty) {
+      return const Center(
+        child: Text('Noch keine eigenen Routen gespeichert.'),
       );
-    });
+    }
+    return ListView.builder(
+      itemCount: entries.length,
+      itemBuilder: (ctx, index) {
+        final route = entries[index];
+        return ListTile(
+          leading: const Icon(Icons.alt_route, color: Color(0xFF39F47B)),
+          title: Text(route.name),
+          subtitle: Text('${route.points.length} Punkte'),
+          trailing: const Icon(Icons.add_circle_outline),
+          onTap: () {
+            _applyRoute(route);
+            Navigator.pop(sheetContext);
+          },
+        );
+      },
+    );
   }
 
   void _deleteSelectedRoute() {
     if (selected == null) return;
     final player = selected!;
-    final hasRoute = routes.any((r) => r.playerIndex == player && r.action == 'route');
+    final hasRoute = routes.any(
+      (r) => r.playerIndex == player && r.action == 'route',
+    );
     if (!hasRoute) return;
     setState(() {
       routes.removeWhere((r) => r.playerIndex == player && r.action == 'route');
@@ -771,79 +1157,117 @@ class _PlayEditorState extends State<PlayEditor> {
     return defenseLabelsFor(defenseFormation)[selected! - 11];
   }
 
-  Widget _field() => LayoutBuilder(builder: (context, constraints) {
-    final fieldSize = Size(constraints.maxWidth, constraints.maxHeight);
-    return Stack(fit: StackFit.expand, children: [GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onPanStart: (details) {
-        if (targetMode != null || zoneSelectionPlayer != null) return;
-        if (routeMode) { _beginDraw(details.localPosition, fieldSize); }
-        else { selectAt(details.localPosition, fieldSize); }
-      },
-      onPanUpdate: (details) {
-        if (targetMode != null || zoneSelectionPlayer != null) return;
-        if (routeMode) { _drawMove(details.localPosition, fieldSize); return; }
-        if (selected == null) return;
-        setState(() {
-          positions[selected!] = Offset(
-            (details.localPosition.dx / fieldSize.width).clamp(.03, .97),
-            (details.localPosition.dy / fieldSize.height).clamp(.03, .97),
-          );
-          if (selected! < 11) { formation = OffenseFormation.custom; }
-          else { defenseFormation = DefenseFormation.custom; }
-        });
-      },
-      onPanEnd: (_) {
-        if (targetMode != null || zoneSelectionPlayer != null) return;
-        if (routeMode) { if (freehand) { _finishDraw(); } }
-        else { _savePositions(); }
-      },
-      onPanCancel: () {
-        if (targetMode != null || zoneSelectionPlayer != null) return;
-        if (routeMode) { setState(() => draft.clear()); }
-        else { _savePositions(); }
-      },
-      onTapUp: (details) {
-        if (zoneSelectionPlayer != null) return;
-        if (targetMode != null) {
-          _assignTarget(_playerAt(details.localPosition, fieldSize));
-          return;
-        }
-        if (routeMode) {
-          if (!freehand) {
-            if (selected == null) { selectAt(details.localPosition, fieldSize); }
-            else { _tapRoute(details.localPosition, fieldSize); }
-          } else {
-            final previous = selected;
-            selectAt(details.localPosition, fieldSize);
-            if (selected == null && previous != null) {
-              setState(() => selected = previous);
-            }
-          }
-        } else { selectAt(details.localPosition, fieldSize); }
-      },
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: FootballFieldPainter(
-          positions, selected, showDefense || _isDefense,
-          showOffense: showDefense || !_isDefense,
-          offenseFormation: formation,
-          defenseFormation: defenseFormation,
-          routes: routes,
-          coverages: zoneSelectionPlayer == null && (_isDefense || showDefense) ? coverages : const <CoverageAssignment>[],
-          showAllCoverage: showAllCoverage,
-          viewFilter: showDefense ? 'all' : viewFilter,
-          focusSelected: focusSelected,
-          draftPoints: draft,
-          draftPlayer: selected,
-        ),
-      ),
-    ),
-    if (zoneSelectionPlayer != null) _zoneSelectionOverlay(fieldSize),
-    ]);
-  });
+  Widget _field() => LayoutBuilder(
+    builder: (context, constraints) {
+      final fieldSize = Size(constraints.maxWidth, constraints.maxHeight);
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onPanStart: (details) {
+              if (targetMode != null || zoneSelectionPlayer != null) return;
+              if (routeMode) {
+                _beginDraw(details.localPosition, fieldSize);
+              } else {
+                selectAt(details.localPosition, fieldSize);
+              }
+            },
+            onPanUpdate: (details) {
+              if (targetMode != null || zoneSelectionPlayer != null) return;
+              if (routeMode) {
+                _drawMove(details.localPosition, fieldSize);
+                return;
+              }
+              if (selected == null) return;
+              setState(() {
+                positions[selected!] = Offset(
+                  (details.localPosition.dx / fieldSize.width).clamp(.03, .97),
+                  (details.localPosition.dy / fieldSize.height).clamp(.03, .97),
+                );
+                if (selected! < 11) {
+                  formation = OffenseFormation.custom;
+                } else {
+                  defenseFormation = DefenseFormation.custom;
+                }
+              });
+            },
+            onPanEnd: (_) {
+              if (targetMode != null || zoneSelectionPlayer != null) return;
+              if (routeMode) {
+                if (freehand) {
+                  _finishDraw();
+                }
+              } else {
+                _savePositions();
+              }
+            },
+            onPanCancel: () {
+              if (targetMode != null || zoneSelectionPlayer != null) return;
+              if (routeMode) {
+                setState(() => draft.clear());
+              } else {
+                _savePositions();
+              }
+            },
+            onTapUp: (details) {
+              if (zoneSelectionPlayer != null) return;
+              if (targetMode != null) {
+                _assignTarget(_playerAt(details.localPosition, fieldSize));
+                return;
+              }
+              if (routeMode) {
+                if (!freehand) {
+                  if (selected == null) {
+                    selectAt(details.localPosition, fieldSize);
+                  } else {
+                    _tapRoute(details.localPosition, fieldSize);
+                  }
+                } else {
+                  final previous = selected;
+                  selectAt(details.localPosition, fieldSize);
+                  if (selected == null && previous != null) {
+                    setState(() => selected = previous);
+                  }
+                }
+              } else {
+                selectAt(details.localPosition, fieldSize);
+              }
+            },
+            child: CustomPaint(
+              size: Size.infinite,
+              painter: FootballFieldPainter(
+                positions,
+                selected,
+                showDefense || _isDefense,
+                showOffense: showDefense || !_isDefense,
+                offenseFormation: formation,
+                defenseFormation: defenseFormation,
+                routes: routes,
+                coverages:
+                    zoneSelectionPlayer == null && (_isDefense || showDefense)
+                    ? coverages
+                    : const <CoverageAssignment>[],
+                showAllCoverage: showAllCoverage,
+                viewFilter: showDefense ? 'all' : viewFilter,
+                focusSelected: focusSelected,
+                draftPoints: draft,
+                draftPlayer: selected,
+              ),
+            ),
+          ),
+          if (zoneSelectionPlayer != null) _zoneSelectionOverlay(fieldSize),
+        ],
+      );
+    },
+  );
 
-  Widget _toolButton(IconData icon, String label, VoidCallback? onTap, {bool active = false}) {
+  Widget _toolButton(
+    IconData icon,
+    String label,
+    VoidCallback? onTap, {
+    bool active = false,
+  }) {
     final accent = Theme.of(context).colorScheme.primary;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -852,33 +1276,66 @@ class _PlayEditorState extends State<PlayEditor> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          color: active ? accent.withValues(alpha: .17) : Colors.white.withValues(alpha: .055),
-          border: Border.all(color: active ? accent.withValues(alpha: .5) : Colors.white12),
+          color: active
+              ? accent.withValues(alpha: .17)
+              : Colors.white.withValues(alpha: .055),
+          border: Border.all(
+            color: active ? accent.withValues(alpha: .5) : Colors.white12,
+          ),
         ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: active ? accent : Colors.white70, size: 21),
-          const SizedBox(height: 6),
-          Text(label, style: const TextStyle(fontSize: 11), maxLines: 1),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: active ? accent : Colors.white70, size: 21),
+            const SizedBox(height: 6),
+            Text(label, style: const TextStyle(fontSize: 11), maxLines: 1),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _formationsPanel() => Column(children: [
-    if (!_isDefense) DropdownButtonFormField<OffenseFormation>(
-      key: ValueKey('offense_$formation'), initialValue: formation,
-      decoration: const InputDecoration(labelText: 'Offense', border: OutlineInputBorder(), isDense: true),
-      items: OffenseFormation.values.map((v) => DropdownMenuItem(value: v, child: Text(v.label))).toList(),
-      onChanged: (v) { if (v != null) { _applyFormation(v); } },
-    ),
-    if (!_isDefense && !_isSpecial) const SizedBox(height: 10),
-    if (_isDefense || showDefense) DropdownButtonFormField<DefenseFormation>(
-      key: ValueKey('defense_$defenseFormation'), initialValue: defenseFormation,
-      decoration: const InputDecoration(labelText: 'Defense', border: OutlineInputBorder(), isDense: true),
-      items: DefenseFormation.values.map((v) => DropdownMenuItem(value: v, child: Text(v.label))).toList(),
-      onChanged: (v) { if (v != null) { _applyDefenseFormation(v); } },
-    ),
-  ]);
+  Widget _formationsPanel() => Column(
+    children: [
+      if (!_isDefense)
+        DropdownButtonFormField<OffenseFormation>(
+          key: ValueKey('offense_$formation'),
+          initialValue: formation,
+          decoration: const InputDecoration(
+            labelText: 'Offense',
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+          items: OffenseFormation.values
+              .map((v) => DropdownMenuItem(value: v, child: Text(v.label)))
+              .toList(),
+          onChanged: (v) {
+            if (v != null) {
+              _applyFormation(v);
+            }
+          },
+        ),
+      if (!_isDefense && !_isSpecial) const SizedBox(height: 10),
+      if (_isDefense || showDefense)
+        DropdownButtonFormField<DefenseFormation>(
+          key: ValueKey('defense_$defenseFormation'),
+          initialValue: defenseFormation,
+          decoration: const InputDecoration(
+            labelText: 'Defense',
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+          items: DefenseFormation.values
+              .map((v) => DropdownMenuItem(value: v, child: Text(v.label)))
+              .toList(),
+          onChanged: (v) {
+            if (v != null) {
+              _applyDefenseFormation(v);
+            }
+          },
+        ),
+    ],
+  );
 
   Future<void> _openFormations() async {
     await showModalBottomSheet<void>(
@@ -887,13 +1344,20 @@ class _PlayEditorState extends State<PlayEditor> {
       showDragHandle: true,
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: EdgeInsets.fromLTRB(18, 8, 18,
-              MediaQuery.viewInsetsOf(ctx).bottom + 24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('Formationen', style: Theme.of(ctx).textTheme.titleLarge),
-            const SizedBox(height: 20),
-            _formationsPanel(),
-          ]),
+          padding: EdgeInsets.fromLTRB(
+            18,
+            8,
+            18,
+            MediaQuery.viewInsetsOf(ctx).bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Formationen', style: Theme.of(ctx).textTheme.titleLarge),
+              const SizedBox(height: 20),
+              _formationsPanel(),
+            ],
+          ),
         ),
       ),
     );
@@ -901,213 +1365,491 @@ class _PlayEditorState extends State<PlayEditor> {
 
   Widget _compactControls() {
     final accent = Theme.of(context).colorScheme.primary;
-    final count = selected == null ? 0 :
-        routes.where((r) => r.playerIndex == selected).length;
+    final count = selected == null
+        ? 0
+        : routes.where((r) => r.playerIndex == selected).length;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
       decoration: const BoxDecoration(
         color: Color(0xFF102219),
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      child: Row(children: [
-        CircleAvatar(radius: 16,
-          backgroundColor: selected == null ? Colors.white12 :
-              selected! < 11 ? const Color(0xFF238EE8) : const Color(0xFFF25D63),
-          child: const Icon(Icons.person_outline, size: 18, color: Colors.white)),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min, children: [
-          Text(_selectedLabel, maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w600)),
-          Text(selected == null ? 'Spieler antippen' : '$count Routen · ${coverages.where((c) => c.defenderIndex == selected).length} Coverage',
-            style: const TextStyle(fontSize: 11, color: Colors.white54)),
-        ])),
-        if (showDefense) PopupMenuButton<String>(
-          tooltip: 'Ansicht filtern',
-          icon: const Icon(Icons.filter_alt_outlined),
-          onSelected: (v) => setState(() => viewFilter = v),
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'all', child: Text('Alle Aktionen')),
-            PopupMenuItem(value: 'offense', child: Text('Offense')),
-            PopupMenuItem(value: 'defense', child: Text('Defense')),
-            PopupMenuItem(value: 'blocking', child: Text('Blocking')),
-          ],
-        ),
-        if (_isOffense && selected != null && selected! < 11) IconButton(
-          tooltip: 'Aufgabe für ausgewählten Offense-Spieler',
-          onPressed: _showPlayerActions,
-          icon: const Icon(Icons.add_task_outlined, color: Color(0xFF7BDCC0)),
-        ),
-        if (_isDefense && selected != null && selected! >= 11) IconButton(
-          tooltip: 'Aufgabe für ausgewählten Verteidiger',
-          onPressed: _showPlayerActions,
-          icon: const Icon(Icons.add_task_outlined, color: Color(0xFF7BDCC0)),
-        ),
-        if (_isDefense) IconButton(
-          tooltip: 'Coverage-Aufgaben aller Spieler',
-          onPressed: _showCoverageOverview,
-          icon: const Icon(Icons.assignment_outlined),
-        ),
-        if (_isDefense) IconButton(
-          tooltip: showAllCoverage ? 'Nur ausgewählte Coverage anzeigen' : 'Alle Coverage-Aufgaben anzeigen',
-          onPressed: () => setState(() => showAllCoverage = !showAllCoverage),
-          icon: Icon(showAllCoverage ? Icons.layers : Icons.layers_clear),
-        ),
-        IconButton(
-          tooltip: 'Werkzeuge öffnen',
-          onPressed: () => setState(() => toolsExpanded = true),
-          icon: Icon(Icons.tune_rounded, color: accent),
-        ),
-      ]),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: selected == null
+                ? Colors.white12
+                : selected! < 11
+                ? const Color(0xFF238EE8)
+                : const Color(0xFFF25D63),
+            child: const Icon(
+              Icons.person_outline,
+              size: 18,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _selectedLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  selected == null
+                      ? 'Spieler antippen'
+                      : '$count Routen · ${coverages.where((c) => c.defenderIndex == selected).length} Coverage',
+                  style: const TextStyle(fontSize: 11, color: Colors.white54),
+                ),
+              ],
+            ),
+          ),
+          if (showDefense)
+            PopupMenuButton<String>(
+              tooltip: 'Ansicht filtern',
+              icon: const Icon(Icons.filter_alt_outlined),
+              onSelected: (v) => setState(() => viewFilter = v),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'all', child: Text('Alle Aktionen')),
+                PopupMenuItem(value: 'offense', child: Text('Offense')),
+                PopupMenuItem(value: 'defense', child: Text('Defense')),
+                PopupMenuItem(value: 'blocking', child: Text('Blocking')),
+              ],
+            ),
+          if (_isOffense && selected != null && selected! < 11)
+            IconButton(
+              tooltip: 'Aufgabe für ausgewählten Offense-Spieler',
+              onPressed: _showPlayerActions,
+              icon: const Icon(
+                Icons.add_task_outlined,
+                color: Color(0xFF7BDCC0),
+              ),
+            ),
+          if (_isDefense && selected != null && selected! >= 11)
+            IconButton(
+              tooltip: 'Aufgabe für ausgewählten Verteidiger',
+              onPressed: _showPlayerActions,
+              icon: const Icon(
+                Icons.add_task_outlined,
+                color: Color(0xFF7BDCC0),
+              ),
+            ),
+          if (_isDefense)
+            IconButton(
+              tooltip: 'Coverage-Aufgaben aller Spieler',
+              onPressed: _showCoverageOverview,
+              icon: const Icon(Icons.assignment_outlined),
+            ),
+          if (_isDefense)
+            IconButton(
+              tooltip: showAllCoverage
+                  ? 'Nur ausgewählte Coverage anzeigen'
+                  : 'Alle Coverage-Aufgaben anzeigen',
+              onPressed: () =>
+                  setState(() => showAllCoverage = !showAllCoverage),
+              icon: Icon(showAllCoverage ? Icons.layers : Icons.layers_clear),
+            ),
+          IconButton(
+            tooltip: 'Werkzeuge öffnen',
+            onPressed: () => setState(() => toolsExpanded = true),
+            icon: Icon(Icons.tune_rounded, color: accent),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _controls({required bool landscape}) {
     final accent = Theme.of(context).colorScheme.primary;
-    final actions = selected == null ? <PlayerRoute>[] : routes.where((r) => r.playerIndex == selected).toList();
+    final actions = selected == null
+        ? <PlayerRoute>[]
+        : routes.where((r) => r.playerIndex == selected).toList();
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
         color: const Color(0xFF102219),
-        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: .1))),
-        borderRadius: landscape ? BorderRadius.circular(18) : const BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border(
+          top: BorderSide(color: Colors.white.withValues(alpha: .1)),
+        ),
+        borderRadius: landscape
+            ? BorderRadius.circular(18)
+            : const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          IconButton(tooltip: 'Werkzeuge schließen', onPressed: () => setState(() => toolsExpanded = false), icon: const Icon(Icons.keyboard_arrow_down)),
-          CircleAvatar(radius: 16, backgroundColor: selected == null ? Colors.white12 : (selected! < 11 ? const Color(0xFF238EE8) : const Color(0xFFF25D63)),
-            child: Icon(selected == null ? Icons.touch_app_outlined : Icons.person_outline, color: Colors.white, size: 18)),
-          const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(_selectedLabel, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-            Text(selected == null ? 'Spieler auf dem Feld antippen' : '${actions.length} Aufgaben · ${routeMode ? (freehand ? 'Freihand' : 'Punkte') : 'Verschieben'}',
-              style: const TextStyle(color: Colors.white54, fontSize: 11)),
-          ])),
-          IconButton(
-            tooltip: 'Passroute des Spielers löschen',
-            onPressed: selected != null &&
-                    routes.any((r) => r.playerIndex == selected && r.action == 'route')
-                ? _deleteSelectedRoute
-                : null,
-            icon: const Icon(Icons.delete_outline, size: 20),
-          ),
-          IconButton(tooltip: 'Auswahl aufheben', onPressed: selected == null ? null : () => setState(() => selected = null), icon: const Icon(Icons.close, size: 19)),
-        ]),
-        const SizedBox(height: 10),
-        if (showDefense) Row(children: [
-          Expanded(child: DropdownButtonFormField<String>(
-            key: ValueKey('view_$viewFilter'),
-            initialValue: viewFilter,
-            isDense: true,
-            decoration: const InputDecoration(labelText: 'Ansicht', isDense: true, border: OutlineInputBorder()),
-            items: const [
-              DropdownMenuItem(value: 'all', child: Text('Alle Aktionen')),
-              DropdownMenuItem(value: 'offense', child: Text('Offense')),
-              DropdownMenuItem(value: 'defense', child: Text('Defense')),
-              DropdownMenuItem(value: 'blocking', child: Text('Blocking')),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  tooltip: 'Werkzeuge schließen',
+                  onPressed: () => setState(() => toolsExpanded = false),
+                  icon: const Icon(Icons.keyboard_arrow_down),
+                ),
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: selected == null
+                      ? Colors.white12
+                      : (selected! < 11
+                            ? const Color(0xFF238EE8)
+                            : const Color(0xFFF25D63)),
+                  child: Icon(
+                    selected == null
+                        ? Icons.touch_app_outlined
+                        : Icons.person_outline,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedLabel,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                      Text(
+                        selected == null
+                            ? 'Spieler auf dem Feld antippen'
+                            : '${actions.length} Aufgaben · ${routeMode ? (freehand ? 'Freihand' : 'Punkte') : 'Verschieben'}',
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Passroute des Spielers löschen',
+                  onPressed:
+                      selected != null &&
+                          routes.any(
+                            (r) =>
+                                r.playerIndex == selected &&
+                                r.action == 'route',
+                          )
+                      ? _deleteSelectedRoute
+                      : null,
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                ),
+                IconButton(
+                  tooltip: 'Auswahl aufheben',
+                  onPressed: selected == null
+                      ? null
+                      : () => setState(() => selected = null),
+                  icon: const Icon(Icons.close, size: 19),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (showDefense)
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      key: ValueKey('view_$viewFilter'),
+                      initialValue: viewFilter,
+                      isDense: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Ansicht',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'all',
+                          child: Text('Alle Aktionen'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'offense',
+                          child: Text('Offense'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'defense',
+                          child: Text('Defense'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'blocking',
+                          child: Text('Blocking'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => viewFilter = value);
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    tooltip: focusSelected
+                        ? 'Alle Aufgaben anzeigen'
+                        : 'Ausgewaehlten Spieler fokussieren',
+                    onPressed: selected == null
+                        ? null
+                        : () => setState(() => focusSelected = !focusSelected),
+                    icon: Icon(
+                      focusSelected
+                          ? Icons.filter_center_focus
+                          : Icons.center_focus_weak,
+                    ),
+                  ),
+                ],
+              ),
+            if (targetMode != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      targetMode == 'block'
+                          ? 'Blockziel: Verteidiger antippen'
+                          : targetMode == 'man'
+                          ? 'Man Coverage: Receiver antippen'
+                          : 'Handoff: Ballempfänger antippen',
+                      style: TextStyle(
+                        color: accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() => targetMode = null),
+                    child: const Text('Abbrechen'),
+                  ),
+                ],
+              ),
             ],
-            onChanged: (value) {
-              if (value != null) { setState(() => viewFilter = value); }
-            },
-          )),
-          const SizedBox(width: 8),
-          IconButton.filledTonal(
-            tooltip: focusSelected ? 'Alle Aufgaben anzeigen' : 'Ausgewaehlten Spieler fokussieren',
-            onPressed: selected == null ? null : () => setState(() => focusSelected = !focusSelected),
-            icon: Icon(focusSelected ? Icons.filter_center_focus : Icons.center_focus_weak),
-          ),
-        ]),
-        if (targetMode != null) ...[
-          const SizedBox(height: 8),
-          Row(children: [
-            Expanded(child: Text(targetMode == 'block'
-                ? 'Blockziel: Verteidiger antippen'
-                : targetMode == 'man' ? 'Man Coverage: Receiver antippen'
-                : 'Handoff: Ballempfänger antippen',
-                style: TextStyle(color: accent, fontWeight: FontWeight.w600))),
-            TextButton(onPressed: () => setState(() => targetMode = null),
-                child: const Text('Abbrechen')),
-          ]),
-        ],
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(child: _toolButton(Icons.open_with, 'Bewegen', () => setState(() { routeMode = false; draft.clear(); }), active: !routeMode)),
-          const SizedBox(width: 7),
-          Expanded(child: _toolButton(Icons.alt_route, 'Zeichnen', () => setState(() { routeMode = true; draft.clear(); }), active: routeMode)),
-          const SizedBox(width: 7),
-          Expanded(child: _toolButton(Icons.auto_awesome_motion, 'Aktionen', _showPlayerActions)),
-          const SizedBox(width: 7),
-          Expanded(child: _toolButton(Icons.menu_book_outlined, 'Bibliothek', _showRouteLibrary)),
-        ]),
-        if (_isDefense && selected != null && selected! >= 11) ...[
-          const SizedBox(height: 8),
-          OutlinedButton.icon(onPressed: _showPlayerActions,
-            icon: const Icon(Icons.shield_outlined), label: const Text('Coverage zuweisen / bearbeiten')),
-          SwitchListTile.adaptive(title: const Text('Alle Coverage-Aufgaben anzeigen'),
-            value: showAllCoverage, onChanged: (v) => setState(() => showAllCoverage = v)),
-        ],
-        if (!_isDefense && selected != null && selected! < 11) ...[
-          const SizedBox(height: 8),
-          Row(children: [
-            Expanded(child: OutlinedButton.icon(
-              onPressed: () => _startTargetAssignment('block'),
-              icon: const Icon(Icons.shield_outlined, size: 18),
-              label: const Text('Blockziel'),
-            )),
-            if (selected == 5) ...[
-              const SizedBox(width: 8),
-              Expanded(child: OutlinedButton.icon(
-                onPressed: () => _startTargetAssignment('handoff'),
-                icon: const Icon(Icons.sports_football, size: 18),
-                label: const Text('Handoff'),
-              )),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _toolButton(
+                    Icons.open_with,
+                    'Bewegen',
+                    () => setState(() {
+                      routeMode = false;
+                      draft.clear();
+                    }),
+                    active: !routeMode,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: _toolButton(
+                    Icons.alt_route,
+                    'Zeichnen',
+                    () => setState(() {
+                      routeMode = true;
+                      draft.clear();
+                    }),
+                    active: routeMode,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: _toolButton(
+                    Icons.auto_awesome_motion,
+                    'Aktionen',
+                    _showPlayerActions,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: _toolButton(
+                    Icons.menu_book_outlined,
+                    'Bibliothek',
+                    _showRouteLibrary,
+                  ),
+                ),
+              ],
+            ),
+            if (_isDefense && selected != null && selected! >= 11) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _showPlayerActions,
+                icon: const Icon(Icons.shield_outlined),
+                label: const Text('Coverage zuweisen / bearbeiten'),
+              ),
+              SwitchListTile.adaptive(
+                title: const Text('Alle Coverage-Aufgaben anzeigen'),
+                value: showAllCoverage,
+                onChanged: (v) => setState(() => showAllCoverage = v),
+              ),
             ],
-          ]),
-        ],
-        if (routeMode) ...[
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: SegmentedButton<bool>(
-              segments: const [ButtonSegment(value: true, label: Text('Freihand')), ButtonSegment(value: false, label: Text('Punkte'))],
-              selected: {freehand}, showSelectedIcon: false,
-              onSelectionChanged: (v) => setState(() { freehand = v.first; draft.clear(); }),
-            )),
-            if (!freehand) ...[const SizedBox(width: 8), IconButton.filledTonal(onPressed: _finishDraw, tooltip: 'Route abschließen', icon: const Icon(Icons.check))],
-          ]),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            key: ValueKey('action_$drawingAction'), initialValue: drawingAction, isDense: true,
-            decoration: const InputDecoration(labelText: 'Zeichenwerkzeug', isDense: true, border: OutlineInputBorder()),
-            items: [
-              if (!_isDefense) const DropdownMenuItem(value: 'route', child: Text('Passroute')),
-              if (!_isDefense) const DropdownMenuItem(value: 'run', child: Text('Laufweg')),
-              if (!_isDefense) const DropdownMenuItem(value: 'movement', child: Text('QB-Bewegung')),
-              if (!_isDefense) const DropdownMenuItem(value: 'block', child: Text('Run Block / Pull')),
-              if (!_isDefense) const DropdownMenuItem(value: 'protection', child: Text('Pass Protection')),
-              if (_isDefense) const DropdownMenuItem(value: 'blitz', child: Text('Blitz')),
-              if (_isDefense) const DropdownMenuItem(value: 'coverage', child: Text('Coverage')),
-              if (_isDefense) const DropdownMenuItem(value: 'defense', child: Text('Run Fit / Defense')),
+            if (!_isDefense && selected != null && selected! < 11) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _startTargetAssignment('block'),
+                      icon: const Icon(Icons.shield_outlined, size: 18),
+                      label: const Text('Blockziel'),
+                    ),
+                  ),
+                  if (selected == 5) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _startTargetAssignment('handoff'),
+                        icon: const Icon(Icons.sports_football, size: 18),
+                        label: const Text('Handoff'),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ],
-            onChanged: (v) { if (v != null) { setState(() => drawingAction = v); } },
-          ),
-        ],
-        if (actions.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Wrap(spacing: 6, runSpacing: 4, children: actions.map((r) => Chip(
-            label: Text(r.name.isEmpty ? r.action : r.name, style: const TextStyle(fontSize: 11)),
-            visualDensity: VisualDensity.compact,
-            deleteIcon: const Icon(Icons.close, size: 15),
-            onDeleted: () { setState(() => routes.remove(r)); _saveRoutes(); },
-          )).toList()),
-        ],
-        const SizedBox(height: 8),
-        Row(children: [
-          TextButton.icon(onPressed: _saveTemplate, icon: const Icon(Icons.bookmark_add_outlined, size: 18), label: const Text('Vorlage')),
-          TextButton.icon(onPressed: _undoLastAction, icon: const Icon(Icons.undo, size: 18), label: const Text('Rückgängig')),
-          const Spacer(),
-          TextButton(onPressed: () => setState(() { routeMode = false; selected = null; draft.clear(); }), child: Text('Fertig', style: TextStyle(color: accent))),
-        ]),
-      ])),
+            if (routeMode) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(value: true, label: Text('Freihand')),
+                        ButtonSegment(value: false, label: Text('Punkte')),
+                      ],
+                      selected: {freehand},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (v) => setState(() {
+                        freehand = v.first;
+                        draft.clear();
+                      }),
+                    ),
+                  ),
+                  if (!freehand) ...[
+                    const SizedBox(width: 8),
+                    IconButton.filledTonal(
+                      onPressed: _finishDraw,
+                      tooltip: 'Route abschließen',
+                      icon: const Icon(Icons.check),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                key: ValueKey('action_$drawingAction'),
+                initialValue: drawingAction,
+                isDense: true,
+                decoration: const InputDecoration(
+                  labelText: 'Zeichenwerkzeug',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  if (!_isDefense)
+                    const DropdownMenuItem(
+                      value: 'route',
+                      child: Text('Passroute'),
+                    ),
+                  if (!_isDefense)
+                    const DropdownMenuItem(
+                      value: 'run',
+                      child: Text('Laufweg'),
+                    ),
+                  if (!_isDefense)
+                    const DropdownMenuItem(
+                      value: 'movement',
+                      child: Text('QB-Bewegung'),
+                    ),
+                  if (!_isDefense)
+                    const DropdownMenuItem(
+                      value: 'block',
+                      child: Text('Run Block / Pull'),
+                    ),
+                  if (!_isDefense)
+                    const DropdownMenuItem(
+                      value: 'protection',
+                      child: Text('Pass Protection'),
+                    ),
+                  if (_isDefense)
+                    const DropdownMenuItem(
+                      value: 'blitz',
+                      child: Text('Blitz'),
+                    ),
+                  if (_isDefense)
+                    const DropdownMenuItem(
+                      value: 'coverage',
+                      child: Text('Coverage'),
+                    ),
+                  if (_isDefense)
+                    const DropdownMenuItem(
+                      value: 'defense',
+                      child: Text('Run Fit / Defense'),
+                    ),
+                ],
+                onChanged: (v) {
+                  if (v != null) {
+                    setState(() => drawingAction = v);
+                  }
+                },
+              ),
+            ],
+            if (actions.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: actions
+                    .map(
+                      (r) => Chip(
+                        label: Text(
+                          r.name.isEmpty ? r.action : r.name,
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        visualDensity: VisualDensity.compact,
+                        deleteIcon: const Icon(Icons.close, size: 15),
+                        onDeleted: () {
+                          setState(() => routes.remove(r));
+                          _saveRoutes();
+                        },
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: _saveTemplate,
+                  icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                  label: const Text('Vorlage'),
+                ),
+                TextButton.icon(
+                  onPressed: _undoLastAction,
+                  icon: const Icon(Icons.undo, size: 18),
+                  label: const Text('Rückgängig'),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => setState(() {
+                    routeMode = false;
+                    selected = null;
+                    draft.clear();
+                  }),
+                  child: Text('Fertig', style: TextStyle(color: accent)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1126,11 +1868,15 @@ class _PlayEditorState extends State<PlayEditor> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Coverage-Übersicht',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const Text(
+                  'Coverage-Übersicht',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 6),
-                Text('${assignments.length} zugewiesene Coverage-Aufgaben',
-                    style: const TextStyle(color: Colors.white70)),
+                Text(
+                  '${assignments.length} zugewiesene Coverage-Aufgaben',
+                  style: const TextStyle(color: Colors.white70),
+                ),
                 const SizedBox(height: 12),
                 if (assignments.isEmpty)
                   const Padding(
@@ -1147,28 +1893,40 @@ class _PlayEditorState extends State<PlayEditor> {
                       if (defender < 11 || defender >= positions.length) {
                         return const SizedBox.shrink();
                       }
-                      final defenderName =
-                          defenseLabelsFor(defenseFormation)[defender - 11];
+                      final defenderName = defenseLabelsFor(
+                        defenseFormation,
+                      )[defender - 11];
                       final isMan = assignment.kind == 'man';
                       final receiver = assignment.receiverIndex;
-                      final targetName = isMan && receiver != null &&
-                              receiver >= 0 && receiver < 11
+                      final targetName =
+                          isMan &&
+                              receiver != null &&
+                              receiver >= 0 &&
+                              receiver < 11
                           ? offenseLabelAt(receiver, formation)
                           : 'nicht zugewiesen';
                       final description = isMan
                           ? 'Man Coverage → $targetName'
                           : 'Zone Coverage → ${assignment.zoneName ?? 'Zone'}';
-                      final color = Colors.primaries[(defender - 11) % Colors.primaries.length];
+                      final color = Colors
+                          .primaries[(defender - 11) % Colors.primaries.length];
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: CircleAvatar(
                           backgroundColor: color,
-                          child: Text(defenderName,
-                              style: const TextStyle(color: Colors.white,
-                                  fontSize: 10, fontWeight: FontWeight.bold)),
+                          child: Text(
+                            defenderName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                        title: Text(defenderName,
-                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        title: Text(
+                          defenderName,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         subtitle: Text(description),
                         trailing: const Icon(Icons.center_focus_strong),
                         onTap: () {
@@ -1212,35 +1970,119 @@ class _PlayEditorState extends State<PlayEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
+    final landscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
     return Scaffold(
       appBar: AppBar(
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(widget.title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-          Text(_isDefense ? defenseFormation.label : _isSpecial ? 'Special Teams · Basis-Editor' : formation.label, style: const TextStyle(fontSize: 11, color: Colors.white54)),
-        ]),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.title,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              _isDefense
+                  ? defenseFormation.label
+                  : _isSpecial
+                  ? 'Special Teams · Basis-Editor'
+                  : formation.label,
+              style: const TextStyle(fontSize: 11, color: Colors.white54),
+            ),
+          ],
+        ),
         actions: [
-          if (_isDefense) IconButton(
-            tooltip: 'Coverage-Übersicht',
-            icon: const Icon(Icons.assignment_outlined),
-            onPressed: _showCoverageOverview,
+          if (_isDefense)
+            IconButton(
+              tooltip: 'Coverage-Übersicht',
+              icon: const Icon(Icons.assignment_outlined),
+              onPressed: _showCoverageOverview,
+            ),
+          IconButton(
+            tooltip: 'Formation',
+            icon: const Icon(Icons.grid_view_rounded),
+            onPressed: _openFormations,
           ),
-          IconButton(tooltip: 'Formation', icon: const Icon(Icons.grid_view_rounded), onPressed: _openFormations),
-          IconButton(tooltip: showDefense ? 'Gegner ausblenden' : 'Gegner einblenden', icon: Icon(showDefense ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-            onPressed: () => setState(() { showDefense = !showDefense; selected = null; targetMode = null; })),
+          IconButton(
+            tooltip: showDefense ? 'Gegner ausblenden' : 'Gegner einblenden',
+            icon: Icon(
+              showDefense
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+            ),
+            onPressed: () => setState(() {
+              showDefense = !showDefense;
+              selected = null;
+              targetMode = null;
+            }),
+          ),
         ],
       ),
-      body: SafeArea(child: Column(children: [
-        Expanded(child: landscape
-          ? Row(children: [
-              Expanded(child: Padding(padding: const EdgeInsets.all(8), child: ClipRRect(borderRadius: BorderRadius.circular(16), child: _field()))),
-              if (toolsExpanded) SizedBox(width: 300, child: Padding(padding: const EdgeInsets.fromLTRB(0, 8, 8, 8), child: _controls(landscape: true))) else SizedBox(width: 62, child: Center(child: IconButton(tooltip: 'Werkzeuge öffnen', onPressed: () => setState(() => toolsExpanded = true), icon: const Icon(Icons.tune_rounded)))),
-            ])
-          : Column(children: [
-              Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(10, 4, 10, 8), child: ClipRRect(borderRadius: BorderRadius.circular(16), child: _field()))),
-              if (toolsExpanded) ConstrainedBox(constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .43), child: _controls(landscape: false)) else _compactControls(),
-            ])),
-      ])),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: landscape
+                  ? Row(
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: _field(),
+                            ),
+                          ),
+                        ),
+                        if (toolsExpanded)
+                          SizedBox(
+                            width: 300,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(0, 8, 8, 8),
+                              child: _controls(landscape: true),
+                            ),
+                          )
+                        else
+                          SizedBox(
+                            width: 62,
+                            child: Center(
+                              child: IconButton(
+                                tooltip: 'Werkzeuge öffnen',
+                                onPressed: () =>
+                                    setState(() => toolsExpanded = true),
+                                icon: const Icon(Icons.tune_rounded),
+                              ),
+                            ),
+                          ),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: _field(),
+                            ),
+                          ),
+                        ),
+                        if (toolsExpanded)
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight:
+                                  MediaQuery.sizeOf(context).height * .43,
+                            ),
+                            child: _controls(landscape: false),
+                          )
+                        else
+                          _compactControls(),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
