@@ -40,6 +40,16 @@ class FootballFieldPainter extends CustomPainter {
   static const Color _blockColor = Color(0xFFFFD166);
   static const Color _runColor = Color(0xFF57D7FF);
 
+  double get _scrimmageY {
+    if (positions.length < 5) return .595;
+    final lineY =
+        positions
+            .take(5)
+            .fold<double>(0, (sum, position) => sum + position.dy) /
+        5;
+    return (lineY - .025).clamp(.04, .96).toDouble();
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRRect(
@@ -65,8 +75,8 @@ class FootballFieldPainter extends CustomPainter {
     }
 
     canvas.drawLine(
-      Offset(0, size.height * .54),
-      Offset(size.width, size.height * .54),
+      Offset(0, size.height * _scrimmageY),
+      Offset(size.width, size.height * _scrimmageY),
       Paint()
         ..color = const Color(0xFFFFD06A)
         ..strokeWidth = 2,
@@ -509,7 +519,7 @@ class FootballFieldPainter extends CustomPainter {
 
     // Abstand zur gelben Line of Scrimmage halten.
     if (unit.dy < -.01) {
-      final lowerLimit = size.height * .54 + 13;
+      final lowerLimit = size.height * _scrimmageY + 13;
       final allowed = (lowerLimit - start.dy) / unit.dy;
 
       if (allowed > 22 && allowed < distance) {

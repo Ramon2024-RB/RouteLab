@@ -10,6 +10,7 @@ import 'formations/defense_formations.dart';
 import 'painters/football_field_painter.dart';
 import 'player_actions.dart';
 import 'offense_personnel.dart';
+import 'personnel_layout.dart';
 import 'individual_block_editor.dart';
 import 'run_play_designer.dart';
 import 'blocking_designer.dart';
@@ -216,12 +217,46 @@ class _PlayEditorState extends State<PlayEditor> {
     _saveRoutes();
   }
 
-  void _movePersonnelSlot(int index, String previous, String next) {
-    if (OffensePersonnel.isBack(previous) == OffensePersonnel.isBack(next)) {
-      return;
+  void _arrangeSkillPlayers() {
+    final updated = PersonnelLayout.arrange(
+      positions: positions,
+      roles: [
+        for (var index = 6; index <= 10; index++)
+          OffensePersonnel.labelAt(index, formation, routes),
+      ],
+      formation: formation,
+    );
+    for (var index = 6; index <= 10; index++) {
+      positions[index] = updated[index];
     }
+  }
 
-    positions[index] = OffensePersonnel.positionFor(index, next);
+  Future<bool> _confirmReposition() async {
+    if (!routes.any((route) => route.action != 'personnel')) {
+      return true;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Spieler neu aufstellen?'),
+        content: const Text(
+          'Bereits gezeichnete Routen und Blocks bleiben gespeichert. '
+          'Sie verschieben sich jedoch mit ihren Spielern und können '
+          'danach eine Anpassung benötigen. Fortfahren?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Neu aufstellen'),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true && mounted;
   }
 
   void _changePersonnelRole(int player, String nextRole) {
@@ -243,13 +278,11 @@ class _PlayEditorState extends State<PlayEditor> {
     setState(() {
       if (occupied != null) {
         OffensePersonnel.assignRole(routes, occupied, previous);
-
-        _movePersonnelSlot(occupied, nextRole, previous);
       }
 
       OffensePersonnel.assignRole(routes, player, nextRole);
 
-      _movePersonnelSlot(player, previous, nextRole);
+      _arrangeSkillPlayers();
 
       draft.clear();
     });
@@ -267,16 +300,15 @@ class _PlayEditorState extends State<PlayEditor> {
     '22': ['RB', 'X', 'HB', 'Y', 'U'],
   };
 
-  void _applyPackage(String code) {
-    final labels = _packages[code]!;
+  Future<void> _applyPackage(String code) async {
+    final labels = _packages[code];
+    if (labels == null || !await _confirmReposition()) return;
+
     setState(() {
       for (var i = 0; i < 5; i++) {
-        final index = i + 6;
-        final old = OffensePersonnel.labelAt(index, formation, routes);
-        final next = labels[i];
-        OffensePersonnel.assignRole(routes, index, next);
-        _movePersonnelSlot(index, old, next);
+        OffensePersonnel.assignRole(routes, i + 6, labels[i]);
       }
+      _arrangeSkillPlayers();
       draft.clear();
     });
     _savePositions();
@@ -314,9 +346,9 @@ class _PlayEditorState extends State<PlayEditor> {
                     for (final code in _packages.keys)
                       ActionChip(
                         label: Text('$code Personnel'),
-                        onPressed: () {
-                          _applyPackage(code);
-                          refresh(() {});
+                        onPressed: () async {
+                          await _applyPackage(code);
+                          if (ctx.mounted) refresh(() {});
                         },
                       ),
                   ],
@@ -1405,14 +1437,22 @@ class _PlayEditorState extends State<PlayEditor> {
   void _savePositions() =>
       widget.onPositionsChanged(List<Offset>.from(positions));
 
-  void _applyFormation(OffenseFormation next) {
-    if (next == OffenseFormation.custom) {
-      return;
-    }
+  Future<void> _applyFormation(OffenseFormation next) async {
+    if (next == OffenseFormation.custom) return;
+    if (!await _confirmReposition()) return;
+
     final preset = offenseFormationPositions(next);
+    final arranged = PersonnelLayout.arrange(
+      positions: preset,
+      roles: [
+        for (var index = 6; index <= 10; index++)
+          OffensePersonnel.labelAt(index, formation, routes),
+      ],
+      formation: next,
+    );
     setState(() {
       for (var i = 0; i < 11; i++) {
-        positions[i] = preset[i];
+        positions[i] = arranged[i];
       }
       formation = next;
       selected = null;
