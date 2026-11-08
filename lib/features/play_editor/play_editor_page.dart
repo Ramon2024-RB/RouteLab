@@ -11,6 +11,7 @@ import 'painters/football_field_painter.dart';
 import 'player_actions.dart';
 import 'offense_personnel.dart';
 import 'personnel_layout.dart';
+import 'formation_validator.dart';
 import 'individual_block_editor.dart';
 import 'run_play_designer.dart';
 import 'blocking_designer.dart';
@@ -1485,9 +1486,134 @@ class _PlayEditorState extends State<PlayEditor> {
     return defenseLabelsFor(defenseFormation)[selected! - 11];
   }
 
+  FormationReport _formationCheck(Size fieldSize) => FormationValidator.check(
+    positions: positions,
+    skillRoles: [
+      for (var index = 6; index <= 10; index++)
+        OffensePersonnel.labelAt(index, formation, routes),
+    ],
+    fieldSize: fieldSize,
+  );
+
+  Future<void> _showFormationCheck(FormationReport report) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(sheetContext).height * .62,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+            children: [
+              Text(
+                'Aufstellung prüfen',
+                style: Theme.of(sheetContext).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '11 Spieler · ${report.lineCount} an der Linie · '
+                '${report.backfieldCount} dahinter',
+                style: const TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 16),
+              if (report.isClear)
+                const ListTile(
+                  leading: Icon(
+                    Icons.check_circle_outline,
+                    color: Color(0xFF7BDCC0),
+                  ),
+                  title: Text('Alles sieht gut aus'),
+                  subtitle: Text(
+                    'Bei den geprüften Spielerpositionen '
+                    'wurden keine Probleme gefunden.',
+                  ),
+                ),
+              for (final issue in report.issues)
+                Card(
+                  color: const Color(0xFF1B3428),
+                  child: ListTile(
+                    leading: Icon(
+                      issue.level == FormationIssueLevel.error
+                          ? Icons.error_outline
+                          : Icons.warning_amber_rounded,
+                      color: issue.level == FormationIssueLevel.error
+                          ? const Color(0xFFFF7777)
+                          : const Color(0xFFFFD166),
+                    ),
+                    title: Text(issue.title),
+                    subtitle: Text(issue.detail),
+                  ),
+                ),
+              const SizedBox(height: 12),
+              const Text(
+                'RouteLab prüft die Positionen der Spieler. '
+                'Trikotnummern und besondere Spielsituationen '
+                'werden nicht geprüft.',
+                style: TextStyle(fontSize: 12, color: Colors.white60),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _formationCheckBadge(FormationReport report) {
+    final hasErrors = report.errorCount > 0;
+    final hasWarnings = report.warningCount > 0;
+    final color = hasErrors
+        ? const Color(0xFFFF7777)
+        : hasWarnings
+        ? const Color(0xFFFFD166)
+        : const Color(0xFF7BDCC0);
+    final warningLabel = report.warningCount == 1 ? 'Hinweis' : 'Hinweise';
+    final text = hasErrors
+        ? '${report.errorCount} Fehler · ${report.warningCount} $warningLabel'
+        : hasWarnings
+        ? '${report.warningCount} $warningLabel'
+        : 'Formation OK';
+    return Material(
+      color: const Color(0xF0102219),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _showFormationCheck(report),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                hasErrors
+                    ? Icons.error_outline
+                    : hasWarnings
+                    ? Icons.warning_amber_rounded
+                    : Icons.check_circle_outline,
+                size: 18,
+                color: color,
+              ),
+              const SizedBox(width: 7),
+              Text(
+                text,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 5),
+              const Icon(Icons.chevron_right, size: 16, color: Colors.white70),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _field() => LayoutBuilder(
     builder: (context, constraints) {
       final fieldSize = Size(constraints.maxWidth, constraints.maxHeight);
+      final formationCheck = _isOffense ? _formationCheck(fieldSize) : null;
       return Stack(
         fit: StackFit.expand,
         children: [
@@ -1585,6 +1711,14 @@ class _PlayEditorState extends State<PlayEditor> {
             ),
           ),
           if (zoneSelectionPlayer != null) _zoneSelectionOverlay(fieldSize),
+          if (formationCheck != null &&
+              zoneSelectionPlayer == null &&
+              targetMode == null)
+            Positioned(
+              top: 9,
+              right: 9,
+              child: _formationCheckBadge(formationCheck),
+            ),
         ],
       );
     },
